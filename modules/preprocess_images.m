@@ -1,8 +1,10 @@
 function preprocessedImages = preprocess_images(folder_path)
 % PREPROCESS_IMAGES - Loads and processes satellite images from a folder.
 %
+% Requirements: Image Preprocessing Tool from MathWorks
+%
 % Input:
-%   folder_path - Path to folder with images (format: 'DDMMYYYY.jpg')
+%    Path to folder with images (format: date must be in the filename: DDMMYYYY, MMYYYY or YYYY)
 %
 % Output:
 %   preprocessedImages - Struct array with fields:
@@ -18,17 +20,42 @@ function preprocessedImages = preprocess_images(folder_path)
 
     % Keep only images with valid extension
     for i = 1:length(files)
+        if files(i).isdir
+            continue  % skip directories like '.' and '..'
+        end
         [~, ~, ext] = fileparts(files(i).name);
         if any(strcmpi(ext, valid_ext))
             imageFiles = [imageFiles; files(i)];
         else
-            error('Invalid file detected: %s. Only image files with extensions %s are allowed.', files(i).name, strjoin(valid_ext, ', '));
+            error('Invalid file detected: %s. Only image files with extensions %s are allowed.', ...
+                  files(i).name, strjoin(valid_ext, ', '));
         end
     end
 
-    % Sort images by date in filename (format: DDMMYYYY.jpg)
-    dates = datetime(cellfun(@(f) f(1:8), {imageFiles.name}, 'UniformOutput', false), 'InputFormat', 'ddMMyyyy');
-    [~, idx] = sort(dates);
+    % Try to detect date format DDMMYYYY, MMYYYY or YYYY
+    dateStrings = {};
+    for i = 1:length(imageFiles)
+        name = imageFiles(i).name;
+        base = name(1:min(end, 12)); 
+        matched = false;
+        formats = {'ddMMyyyy', 'MMyyyy', 'yyyy'};
+        for f = 1:length(formats)
+            try
+                d = datetime(base(1:length(formats{f})), 'InputFormat', formats{f});
+                dateStrings{end+1} = d;
+                matched = true;
+                break;
+            catch
+                % try next
+            end
+        end
+        if ~matched
+            error('Filename "%s" does not start with a valid date in format DDMMYYYY, MMYYYY or YYYY.', name);
+        end
+    end
+
+    % Sort images by parsed dates
+    [~, idx] = sort([dateStrings{:}]);
     imageFiles = imageFiles(idx);
 
     % Output initialization
@@ -53,7 +80,7 @@ function preprocessedImages = preprocess_images(folder_path)
         % Apply light blur to reduce noise (optional!!!!!)
         img = imgaussfilt(img, 1); % gaussian blur with sigma = 1
 
-        % Resize to match the first image (It can also be set to a defined Pixel number)
+        % Resize to match the first image (Can be changed to a manual set of # of Pixels)
         if i == 1
             refSize = size(img);
         else
