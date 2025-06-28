@@ -66,11 +66,6 @@ function preprocessedImages = preprocess_images(folder_path)
         fname = fullfile(folder_path, imageFiles(i).name);
         img = imread(fname);
 
-        % Convert to grayscale if it's a color image
-        if size(img,3) == 3
-            img = rgb2gray(img);
-        end
-
         % Normalize brightness with histogram equalization
         img = histeq(img);
 
