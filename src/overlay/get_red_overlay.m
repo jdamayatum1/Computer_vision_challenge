@@ -94,40 +94,13 @@ function [processed_images, gui_params] = get_red_overlay(image_paths, main_pict
     % list for storing intermediate images
     intermediate_images = cell(length(images), 1);
 
-    % Process each image
     for i = 1:length(images)
-        fprintf('Processing image %d of %d...\n', i, length(images));
-
-        % Images are already preprocessed (rotated, translated, resized)
-        curr_img_rgb = images{i};
-        curr_img_gray = rgb2gray(curr_img_rgb);
-
-        % Compute change detection
-        diff_image = abs(ref_img_gray - curr_img_gray);
-
-        % Apply Gaussian smoothing to reduce noise
-        diff_image_smooth = imgaussfilt(diff_image, gaussian_sigma, 'FilterSize', 5);
-
-        % store the intermediate image
+        diff_image_smooth = get_smoothed_grayscale_diffs(ref_img_gray, images{i}, gaussian_sigma);
         intermediate_images{i} = diff_image_smooth;
-
     end
 
     %% 3.2 THRESHOLD DETERMINATION
-    % create a long vector of all pixels in the intermediate images
-    all_pixels = [];
-
-    for i = 1:length(intermediate_images)
-        all_pixels = [all_pixels; intermediate_images{i}(:)];
-    end
-
-    % normalize all values between 0 and 255
-    min_pixel_value = min(all_pixels);
-    max_pixel_value = max(all_pixels);
-    all_pixels = uint8((all_pixels - min_pixel_value) / (max_pixel_value - min_pixel_value) * 255);
-
-    % find global otsu threshold for the all pixels
-    thr = graythresh(all_pixels);
+    thr = determine_otsu_threshold(intermediate_images);
 
     %% 3.3 Mask overlay
     for i = 1:length(intermediate_images)
@@ -136,6 +109,8 @@ function [processed_images, gui_params] = get_red_overlay(image_paths, main_pict
 
         % Apply terrain mask - only consider changes in relevant areas
         masked_change = change_mask & terrain_mask;
+
+        curr_img_rgb = images{i};
 
         % Create red overlay visualization
         overlay_image = curr_img_rgb;
@@ -229,5 +204,42 @@ function [is_valid, message] = input_validation(image_paths, main_picture_path, 
 
     is_valid = true;
     message = 'Input validation passed';
+
+end
+
+function [thr] = determine_otsu_threshold(intermediate_images)
+    % determine the otsu threshold for the intermediate images
+    % input: intermediate_images - cell array of intermediate images
+    % output: thr - otsu threshold
+
+    % create a long vector of all pixels in the intermediate images
+    all_pixels = [];
+
+    for i = 1:length(intermediate_images)
+        all_pixels = [all_pixels; intermediate_images{i}(:)];
+    end
+
+    % normalize all values between 0 and 255
+    min_pixel_value = min(all_pixels);
+    max_pixel_value = max(all_pixels);
+    all_pixels = uint8((all_pixels - min_pixel_value) / (max_pixel_value - min_pixel_value) * 255);
+
+    % find global otsu threshold for the all pixels
+    thr = graythresh(all_pixels);
+end
+
+function [diff_image_smooth] = get_smoothed_grayscale_diffs(reference_image, image, gaussian_sigma)
+    % get the intermediate images
+    % input: images - cell array of images
+    % output: intermediate_images - cell array of intermediate images
+
+    % Images are already preprocessed (rotated, translated, resized)
+    curr_img_gray = rgb2gray(image);
+
+    % Compute change detection
+    diff_image = abs(reference_image - curr_img_gray);
+
+    % Apply Gaussian smoothing to reduce noise
+    diff_image_smooth = imgaussfilt(diff_image, gaussian_sigma, 'FilterSize', 5);
 
 end
