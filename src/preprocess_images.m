@@ -58,29 +58,50 @@ function preprocessedImages = preprocess_images(folder_path)
     [~, idx] = sort([dateStrings{:}]);
     imageFiles = imageFiles(idx);
 
+    % First pass: find smallest image size (height x width)
+    minSize = [Inf, Inf];  % [rows, cols]
+    imageData = cell(length(imageFiles), 1);
+
+    for i = 1:length(imageFiles)
+        fname = fullfile(folder_path, imageFiles(i).name);
+        img = imread(fname);
+        
+        % Store original image for later reuse
+        imageData{i} = img;
+
+        % Use color image size directly
+        sz = size(img);
+        sz = sz(1:2);  % only height and width
+
+        if prod(sz) < prod(minSize)
+            minSize = sz;
+        end
+    end
+
     % Output initialization
     preprocessedImages = struct('name', {}, 'image', {});
 
     % Loop through all images
     for i = 1:length(imageFiles)
         fname = fullfile(folder_path, imageFiles(i).name);
-        img = imread(fname);
+        img = imageData{i};
 
-        % Normalize brightness with histogram equalization
-        img = histeq(img);
-
-        % Convert to double for processing
-        img = im2double(img);
+        % Normalize brightness with histogram equalization (on V channel in HSV)
+        if size(img, 3) == 3
+            img = im2double(img);  % Convert before HSV conversion
+            hsv = rgb2hsv(img);
+            hsv(:,:,3) = histeq(hsv(:,:,3));  % Only Value channel
+            img = hsv2rgb(hsv);
+        else
+            img = histeq(img);
+            img = im2double(img);  % Convert after equalization
+        end
 
         % Apply light blur to reduce noise (optional!!!!!)
         img = imgaussfilt(img, 1); % gaussian blur with sigma = 1
 
-        % Resize to match the first image (Can be changed to a manual set of # of Pixels)
-        if i == 1
-            refSize = size(img);
-        else
-            img = imresize(img, refSize);
-        end
+        % Resize to smallest image
+        img = imresize(img, minSize);
 
         % Save to output struct
         preprocessedImages(end+1).name = imageFiles(i).name;
