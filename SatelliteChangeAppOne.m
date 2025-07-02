@@ -10,6 +10,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         WaterButton matlab.ui.control.RadioButton
         VisualizationDropDown matlab.ui.control.DropDown
         InfoTextArea matlab.ui.control.TextArea
+        infoPanel matlab.ui.container.Panel
 
         PlaybackTimer timer
         IsPlaying logical = false
@@ -26,7 +27,10 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         PauseButton matlab.ui.control.Button
         SpeedSlider matlab.ui.control.Slider
         VisualizeButton matlab.ui.control.Button
-
+        AdvancedPanel matlab.ui.container.Panel
+        AdvancedCheck matlab.ui.control.CheckBox
+        AdvancedToggle matlab.ui.control.Button
+        
         ImageFolder string
         ImageFiles struct
         Images cell
@@ -236,6 +240,15 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 onPlayButtonPressed(app);    % Restart with new speed
             end
         end
+        function toggleAdvancedPanel(app)
+            if strcmp(app.AdvancedPanel.Visible, 'off')
+                app.AdvancedPanel.Visible = 'on';
+                app.AdvancedToggle.Text = 'Hide Advanced ▲';
+            else
+                app.AdvancedPanel.Visible = 'off';
+                app.AdvancedToggle.Text = 'Show Advanced ▼';
+            end
+        end
 
     end
 
@@ -279,14 +292,39 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap'}, ...
                 'Value', 'Flicker', ...
                 'Position', [20 360 180 30]);
+            % Visualization Type Dropdown
+            app.VisualizationDropDown = uidropdown(app.UIFigure, ...
+                'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap'}, ...
+                'Value', 'Flicker', ...
+                'Position', [20 360 180 30]);
+
+            % --- Advanced Settings Collapsible Section ---
+            app.AdvancedPanel = uipanel(app.UIFigure, ...
+                'Title', 'Advanced Settings', ...
+                'Position', [20 250 180 100], ...
+                'FontWeight', 'bold', ...
+                'BackgroundColor', [0.97 0.97 0.97], ...
+                'Visible', 'off'); % Start collapsed
+
+            % Example advanced setting: checkbox
+            app.AdvancedCheck = uicheckbox(app.AdvancedPanel, ...
+                'Text', 'Enable Extra Option', ...
+                'Position', [10 50 150 22]);
+
+            % Toggle button to show/hide advanced settings
+            app.AdvancedToggle = uibutton(app.UIFigure, 'push', ...
+                'Text', 'Show Advanced ▼', ...
+                'Position', [20 320 180 30], ...
+                'ButtonPushedFcn', @(btn, event) toggleAdvancedPanel(app));
 
             % Info Text Area (in a panel for border)
-            infoPanel = uipanel(app.UIFigure, ...
-                'Position', [20 200 180 140], ...
+            app.infoPanel = uipanel(app.UIFigure, ...
+                'Position', [20 190 180 60], ... % Always between advanced panel and visualize button
                 'BorderType', 'line', ...
                 'Title', '');
-            app.InfoTextArea = uitextarea(infoPanel, ...
-                'Position', [1 1 178 138], ...
+
+            app.InfoTextArea = uitextarea(app.infoPanel, ...
+                'Position', [1 1 178 58], ...
                 'Editable', 'off', ...
                 'Value', {'Information will appear here...'});
 
