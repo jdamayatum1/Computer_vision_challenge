@@ -51,7 +51,7 @@ assert(nImgs >= 2, 'Need at least two images to register.');
 
 % 3)  Pick endpoints by index (here: 1 → 4)
 idxA = 1;
-idxB = 11;
+idxB = 10;
 assert(idxB <= nImgs, 'Index idxB (%d) exceeds # frames (%d)', idxB, nImgs);
 movingRGB = pre(idxA).image;
 fixedRGB  = pre(idxB).image;
@@ -61,10 +61,6 @@ fprintf('Registering frame %d (%s) → frame %d (%s)\n', ...
 % 4)  Build the SURF config with the full sequence for fallback
 imgs = { pre.image };  % cell array of all frames
 cfgSURF = struct( ...
-    'MetricThreshold',200, ...  % the lower the more matches
-    'MatchThreshold',80, ...  % the lower the more matches
-    'TransformType','projective', ...
-    'MinInliers',3, ...            % threshold to decide fallback
     'ImageSequence',{ imgs }, ...       % full chronological sequence
     'StartIdx',idxA, ...            % index of movingRGB in that sequence
     'EndIdx',idxB, ...               % index of fixedRGB in that sequence
@@ -78,6 +74,10 @@ reg = registerImagesSURF(movingRGB, fixedRGB, cfgSURF);
 figure;
 imshowpair(reg.registered, fixedRGB, 'blend');
 title(sprintf('Frame %d → Frame %d (blended)', idxA, idxB));
+
+figure;
+imshowpair(reg.registered, fixedRGB, 'checkerboard');
+title(sprintf('Frame %d → %d (checkerboard overlay)', idxA, idxB));
 
 fprintf('Done.  Putative matches: %d; Inliers: %d.\n', ...
     numel(reg.matches.fixed), nnz(reg.inlierIdx));
