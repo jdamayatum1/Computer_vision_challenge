@@ -10,16 +10,19 @@ end
 
 % 1) Declare **all** default values, including fallback fields
 defaults = struct( ...
-    'MetricThreshold', 500, ...
+    'MetricThreshold', 300, ...
     'NumOctaves',      4, ...
     'NumScaleLevels',  6, ...
-    'MatchThreshold',  50, ...
+    'MatchThreshold',  80, ...
     'MaxRatio',        0.6, ...
     'TransformType',   'projective', ...
-    'MinInliers',      30, ...
+    'MinInliers',      8, ...
+    'MaxNumTrials',    8000, ...      % RANSAC: maximum iterations
+    'Confidence',      99,   ...      % RANSAC: desired confidence (percent)
     'ImageSequence',   {{ }}, ...   % <-- double‐brace here!
     'StartIdx',        1, ...
-    'EndIdx',          1 ...
+    'EndIdx',          1, ...
+    'StepMinInliers',  5 ...      % quality gate for each fallback hop
 );
 
 % 2) Merge user cfg into params, overriding defaults only where set
@@ -62,7 +65,9 @@ matchedF = validF(idxPairs(:,1));
 matchedM = validM(idxPairs(:,2));
 
 [tformDir, inlierIdx] = estimateGeometricTransform2D( ...
-        matchedM, matchedF, params.TransformType);
+        matchedM, matchedF, params.TransformType, ...
+        'MaxNumTrials', params.MaxNumTrials, ...
+        'Confidence',   params.Confidence);
 
 % ---------- 3) Fallback chaining if too few inliers ------------------
 if nnz(inlierIdx) < params.MinInliers
@@ -82,12 +87,23 @@ if nnz(inlierIdx) < params.MinInliers
         A = params.ImageSequence{kk};
         B = params.ImageSequence{kk+1};
 
-        % Build a step‐only config that disables chaining by zeroing MinInliers
+        % Build a step-only config
         stepCfg = rmfield(params, {'ImageSequence','StartIdx','EndIdx'});
-        stepCfg.MinInliers = 0;    % <-- DISABLE fallback in recursive call
+        stepCfg.MinInliers     = params.StepMinInliers;
+        stepCfg.TransformType  = params.TransformType;   % übernimmt 'projective'
 
         tmpReg = registerImagesSURF(A, B, stepCfg);
-        Ttot   = projective2d(tmpReg.tform.T * Ttot.T);
+
+        % Quality check on each hop
+        hopInliers = nnz(tmpReg.inlierIdx);
+        condT      = cond(tmpReg.tform.T);
+        if hopInliers < params.StepMinInliers || condT > 1e7
+            warning('Skip hop %d→%d: only %d inliers or bad condition (%g).', ...
+                     kk, kk+1, hopInliers, condT);
+            continue;   % identity for this hop (keeps previous Ttot)
+        end
+
+        Ttot = projective2d(tmpReg.tform.T * Ttot.T);
     end
 
     finalTform = Ttot;
