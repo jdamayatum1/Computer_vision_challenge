@@ -13,16 +13,18 @@ defaults = struct( ...
     'MetricThreshold', 300, ...
     'NumOctaves',      4, ...
     'NumScaleLevels',  6, ...
-    'MatchThreshold',  80, ...
+    'MatchThreshold',  50, ...
     'MaxRatio',        0.6, ...
     'TransformType',   'projective', ...
-    'MinInliers',      8, ...
-    'MaxNumTrials',    8000, ...      % RANSAC: maximum iterations
+    'MinInliers',      6, ...
+    'MaxNumTrials',    15000, ...      % RANSAC: maximum iterations
     'Confidence',      99,   ...      % RANSAC: desired confidence (percent)
     'ImageSequence',   {{ }}, ...   % <-- double‐brace here!
     'StartIdx',        1, ...
     'EndIdx',          1, ...
-    'StepMinInliers',  5 ...      % quality gate for each fallback hop
+    'StepMinInliers',  3, ...      % quality gate for each fallback hop
+    'StepMaxCond',     1e7, ...      % new parameter
+    'RetryMax',       10 ...          % how many times to re-run RANSAC before fallback
 );
 
 % 2) Merge user cfg into params, overriding defaults only where set
@@ -64,10 +66,21 @@ idxPairs = matchFeatures(featF, featM, ...
 matchedF = validF(idxPairs(:,1));
 matchedM = validM(idxPairs(:,2));
 
-[tformDir, inlierIdx] = estimateGeometricTransform2D( ...
-        matchedM, matchedF, params.TransformType, ...
-        'MaxNumTrials', params.MaxNumTrials, ...
-        'Confidence',   params.Confidence);
+% Replace single RANSAC call with retry loop
+bestInliers = 0;
+for attempt = 1:params.RetryMax
+    [tformTmp, inlierTmp] = estimateGeometricTransform2D( ...
+            matchedM, matchedF, params.TransformType, ...
+            'MaxNumTrials', params.MaxNumTrials, ...
+            'Confidence',   params.Confidence);
+    nIn = nnz(inlierTmp);
+    if nIn > bestInliers
+        bestInliers = nIn;  tformDir = tformTmp;  inlierIdx = inlierTmp;  %#ok<NASGU>
+    end
+    if bestInliers >= params.MinInliers
+        break;   % good enough
+    end
+end
 
 % ---------- 3) Fallback chaining if too few inliers ------------------
 if nnz(inlierIdx) < params.MinInliers
@@ -88,19 +101,18 @@ if nnz(inlierIdx) < params.MinInliers
         B = params.ImageSequence{kk+1};
 
         % Build a step-only config
-        stepCfg = rmfield(params, {'ImageSequence','StartIdx','EndIdx'});
-        stepCfg.MinInliers     = params.StepMinInliers;
-        stepCfg.TransformType  = params.TransformType;   % übernimmt 'projective'
+        stepCfg = params;                      % copy *all* current settings
+        stepCfg = rmfield(stepCfg,{'ImageSequence','StartIdx','EndIdx'});
+        stepCfg.MinInliers = params.StepMinInliers;
 
         tmpReg = registerImagesSURF(A, B, stepCfg);
 
         % Quality check on each hop
         hopInliers = nnz(tmpReg.inlierIdx);
         condT      = cond(tmpReg.tform.T);
-        if hopInliers < params.StepMinInliers || condT > 1e7
-            warning('Skip hop %d→%d: only %d inliers or bad condition (%g).', ...
-                     kk, kk+1, hopInliers, condT);
-            continue;   % identity for this hop (keeps previous Ttot)
+        if hopInliers < params.StepMinInliers || condT > params.StepMaxCond
+            warning('Skip hop %d→%d: %d inliers, cond=%g', kk, kk+1, hopInliers, condT);
+            continue
         end
 
         Ttot = projective2d(tmpReg.tform.T * Ttot.T);
