@@ -10,7 +10,7 @@ fprintf('=== Testing get_red_overlay function with Dubai images ===\n');
 
 %% Configuration
 % Base path to the datasets (adjust if needed)
-base_path = '../challenge/Datasets/Dubai/';
+base_path = 'C:\Users\ASUS\MATLAB\Projects\CV-Challenge\Datasets\Datasets\Dubai';
 
 % Define image paths - using Dubai images from different years
 image_paths = {
