@@ -67,14 +67,18 @@ function [processed_images, gui_params] = get_red_overlay(image_paths, main_pict
     %% 3. CATEGORY-BASED MASK GENERATION
     fprintf('Generating terrain mask for category: %s\n', category);
 
-    % Get the terrain mask using the utility function
+    % Get the terrain mask using HSV-based classification
     try
-        terrain_mask = get_terrain_mask(reference_image, category);
-        fprintf('Terrain mask generated successfully.\n');
+        % Call classifyImageByColor to get category-specific masks
+        [~, ~, ~, masks] = classifyImageByColor(reference_image);
+
+        % Map category names and select appropriate mask
+        terrain_mask = get_category_mask(masks, category);
+        fprintf('Terrain mask generated successfully using HSV classification.\n');
     catch ME
-        fprintf('Warning: get_terrain_mask function not available. Using full image mask.\n');
+        fprintf('Warning: HSV classification failed. Using fallback mask.\n');
         fprintf('Error: %s\n', ME.message);
-        % Create a full mask as fallback
+        % Create a fallback mask
         terrain_mask = true(size(rgb2gray(reference_image)));
         % make the left half false
         terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
@@ -161,6 +165,7 @@ function [processed_images, gui_params] = get_red_overlay(image_paths, main_pict
     gui_params.alpha = alpha;
     gui_params.gaussian_sigma = gaussian_sigma;
     gui_params.category = category;
+    gui_params.terrain_mask = terrain_mask;
     gui_params.detected_changes = change_stats;
     gui_params.confidence_scores = confidence_scores;
     gui_params.total_images = total_images;
@@ -241,5 +246,55 @@ function [diff_image_smooth] = get_smoothed_grayscale_diffs(reference_image, ima
 
     % Apply Gaussian smoothing to reduce noise
     diff_image_smooth = imgaussfilt(diff_image, gaussian_sigma, 'FilterSize', 5);
+
+end
+
+function terrain_mask = get_category_mask(masks, category)
+    % GET_CATEGORY_MASK - Maps category names and returns appropriate mask
+    % Input: masks - struct containing binary masks from classifyImageByColor
+    %        category - requested category string
+    % Output: terrain_mask - binary mask for the requested category
+
+    % Category mapping from input categories to mask field names
+    category_mapping = struct( ...
+        'water', 'water', ...
+        'city', 'city', ...
+        'forrest', 'forest', ... % Handle spelling difference
+        'ice', 'ice', ...
+        'desert', 'desert', ...
+        'farmland', 'feld' ... % Map farmland to feld
+    );
+
+    % Get image dimensions from any available mask
+    mask_fields = fieldnames(masks);
+
+    if isempty(mask_fields)
+        error('No masks available from classification');
+    end
+
+    img_size = size(masks.(mask_fields{1}));
+
+    % Handle 'all' category - combine all available masks
+    if strcmp(category, 'all')
+        terrain_mask = ones(img_size);
+        return;
+    end
+
+    % Map the input category to the mask field name
+    if isfield(category_mapping, category)
+        mapped_category = category_mapping.(category);
+    else
+        error('Unknown category: %s', category);
+    end
+
+    % Check if the mapped category exists in the masks
+    if isfield(masks, mapped_category)
+        terrain_mask = masks.(mapped_category);
+        fprintf('Using mask for category: %s (mapped from %s)\n', mapped_category, category);
+    else
+        % Category not found in masks, create empty mask and warn
+        terrain_mask = false(img_size);
+        fprintf('Warning: Category ''%s'' not found in classification results. Using empty mask.\n', mapped_category);
+    end
 
 end

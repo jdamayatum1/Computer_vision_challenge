@@ -23,7 +23,7 @@ main_picture_path = fullfile(base_path, '12_1995.jpg');
 
 % Test parameters
 is_new_file_list = true; % Force preprocessing
-category = 'city'; % Dubai is a city development
+category = 'water'; % Dubai is a city development
 
 % Input parameters with rotation
 inputParams = struct();
