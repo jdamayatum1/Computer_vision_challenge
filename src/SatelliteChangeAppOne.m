@@ -269,7 +269,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     % cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
                     % Create heatmap overlay using selected mask
-                    overlay_img = visualization.get_heatmap_overlay(img1, img2reg, selectedMask, params);
+                    [overlay_img, stats] = visualization.get_heatmap_overlay(img1, img2reg, selectedMask, params);
 
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
@@ -292,7 +292,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     % cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
                     % Create red overlay using selected mask
-                    overlay_img = visualization.get_red_overlay(img1, img2reg, selectedMask, params);
+                    [overlay_img, stats] = visualization.get_red_overlay(img1, img2reg, selectedMask, params);
 
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');

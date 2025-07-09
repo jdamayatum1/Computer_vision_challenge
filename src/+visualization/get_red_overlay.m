@@ -1,4 +1,4 @@
-function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
+function [overlay_image, stats] = get_red_overlay(ref_img, img, category, inputParams)
     % GET_RED_OVERLAY - Change detection using red mask overlay
     % This function implements change detection by highlighting changed areas in red
     % between two aligned images
@@ -57,7 +57,9 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
         fprintf('Warning: get_category_mask function not available. Using partial image mask.\n');
         fprintf('Error: %s\n', ME.message);
         % Create a partial mask as fallback (exclude left half)
-        terrain_mask = true(size(rgb2gray(ref_img)));
+        terrain_mask_ref = true(size(rgb2gray(ref_img)));
+        terrain_mask_img = true(size(rgb2gray(img)));
+        terrain_mask_united = terrain_mask_ref | terrain_mask_img;
         % terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
     end
 
@@ -108,6 +110,12 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
 
     % Convert back to uint8
     overlay_image = uint8(overlay_image * 255);
+
+    %% 7. CALCULATE STATISTICS
+    fprintf('Calculating statistics...\n');
+
+    % Calculate statistics using utils function
+    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change);
 
     fprintf('Red overlay generation completed successfully!\n');
 end

@@ -1,4 +1,4 @@
-function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams)
+function [overlay_image, stats] = get_heatmap_overlay(ref_img, img, category, inputParams)
     % GET_HEATMAP_OVERLAY - Change detection using heatmap overlay
     % This function implements change detection by creating a heatmap overlay
     % showing the intensity of changes between two aligned images
@@ -57,6 +57,7 @@ function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams
         % Create a partial mask as fallback (exclude left half)
         terrain_mask_ref = true(size(rgb2gray(ref_img)));
         terrain_mask_img = true(size(rgb2gray(img)));
+        terrain_mask_united = terrain_mask_ref | terrain_mask_img;
         % terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
     end
 
@@ -95,6 +96,16 @@ function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams
 
     % Create heatmap overlay
     overlay_image = create_heatmap_overlay(img, masked_diff, thr, alpha, cmap);
+
+    %% 7. CALCULATE STATISTICS
+    fprintf('Calculating statistics...\n');
+
+    % Create change mask for stats calculation
+    change_mask = diff_image_smooth > thr;
+    masked_change = change_mask & terrain_mask_united;
+
+    % Calculate statistics using utils function
+    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change);
 
     fprintf('Heatmap overlay generation completed successfully!\n');
 end
