@@ -47,13 +47,16 @@ function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams
     fprintf('Generating terrain mask for category: %s\n', category);
 
     try
-        terrain_mask = get_terrain_mask(ref_img, category);
+        [terrain_mask_ref, ~] = masks.category_masks(ref_img, category);
+        [terrain_mask_img, ~] = masks.category_masks(img, category);
+        terrain_mask_united = terrain_mask_ref | terrain_mask_img;
         fprintf('Terrain mask generated successfully.\n');
     catch ME
         fprintf('Warning: get_terrain_mask function not available. Using partial image mask.\n');
         fprintf('Error: %s\n', ME.message);
         % Create a partial mask as fallback (exclude left half)
-        terrain_mask = true(size(rgb2gray(ref_img)));
+        terrain_mask_ref = true(size(rgb2gray(ref_img)));
+        terrain_mask_img = true(size(rgb2gray(img)));
         % terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
     end
 
@@ -84,7 +87,8 @@ function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams
 
     % Apply terrain mask - only consider changes in relevant areas
     masked_diff = diff_image_smooth;
-    masked_diff(~terrain_mask) = 0;
+    % masked_diff(~terrain_mask_ref) = 0;
+    masked_diff(~terrain_mask_united) = 0;
 
     % Get colormap for heatmap visualization
     cmap = get_heatmap_colormap(colormap_name);
@@ -118,7 +122,7 @@ function [is_valid, message] = input_validation(ref_img, img, category)
     end
 
     % Check category is valid
-    valid_categories = {'all', 'city', 'water', 'forrest', 'ice', 'desert', 'farmland'};
+    valid_categories = {'all', 'city', 'water', 'forest', 'ice', 'desert', 'feld', 'glacier', 'frauenkirche', 'oktoberfest'};
 
     if ~ismember(category, valid_categories)
         message = sprintf('Invalid category: %s. Must be one of: %s', category, strjoin(valid_categories, ', '));

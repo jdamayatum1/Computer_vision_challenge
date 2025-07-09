@@ -1,4 +1,3 @@
-
 classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
     properties (Access = public)
@@ -9,10 +8,16 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         UIFigure matlab.ui.Figure
         LoadFolderButton matlab.ui.control.Button
         ChangeTypeGroup matlab.ui.container.ButtonGroup
-        ForestButton matlab.ui.control.RadioButton
+        AllButton matlab.ui.control.RadioButton
         CityButton matlab.ui.control.RadioButton
-        InfraButton matlab.ui.control.RadioButton
         WaterButton matlab.ui.control.RadioButton
+        ForestButton matlab.ui.control.RadioButton
+        IceButton matlab.ui.control.RadioButton
+        DesertButton matlab.ui.control.RadioButton
+        FeldButton matlab.ui.control.RadioButton
+        GlacierButton matlab.ui.control.RadioButton
+        FrauenkircheButton matlab.ui.control.RadioButton
+        OktoberfestButton matlab.ui.control.RadioButton
 
         VisualizationDropDown matlab.ui.control.DropDown
 
@@ -53,6 +58,43 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
     end
 
     methods (Access = private)
+
+        function selectedMask = getSelectedMask(app)
+            % Get the currently selected mask category from the radio button group
+            selectedButton = app.ChangeTypeGroup.SelectedObject;
+
+            if isempty(selectedButton)
+                selectedMask = 'all'; % Default fallback
+                return;
+            end
+
+            % Map button to mask category
+            switch selectedButton
+                case app.AllButton
+                    selectedMask = 'all';
+                case app.CityButton
+                    selectedMask = 'city';
+                case app.WaterButton
+                    selectedMask = 'water';
+                case app.ForestButton
+                    selectedMask = 'forest';
+                case app.IceButton
+                    selectedMask = 'ice';
+                case app.DesertButton
+                    selectedMask = 'desert';
+                case app.FeldButton
+                    selectedMask = 'feld';
+                case app.GlacierButton
+                    selectedMask = 'glacier';
+                case app.FrauenkircheButton
+                    selectedMask = 'frauenkirche';
+                case app.OktoberfestButton
+                    selectedMask = 'oktoberfest';
+                otherwise
+                    selectedMask = 'all';
+            end
+
+        end
 
         function LoadFolderButtonPushed(app, ~)
             folder = uigetdir;
@@ -176,6 +218,9 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             [img1, img2reg] = getRegisteredImagePair(app);
             if isempty(img1) || isempty(img2reg), return; end
 
+            % Get selected mask category
+            selectedMask = getSelectedMask(app);
+
             switch mode
                 case 'Flicker'
                     app.FlickerRegisteredImage = img2reg;
@@ -223,12 +268,13 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     % Generate colormap
                     % cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
-                    % Create heatmap overlay using your create_heatmap_overlay utility
-                    overlay_img = visualization.get_heatmap_overlay(img1, img2reg, 'all', params);
+                    % Create heatmap overlay using selected mask
+                    overlay_img = visualization.get_heatmap_overlay(img1, img2reg, selectedMask, params);
 
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
-                    title(app.ResultAxes, sprintf('Heatmap Overlay: %s → %s', ...
+                    title(app.ResultAxes, sprintf('Heatmap Overlay (%s): %s → %s', ...
+                        selectedMask, ...
                         strrep(app.ImageDropDown2.Value, '_', ' '), ...
                         strrep(app.ImageDropDown1.Value, '_', ' ')));
 
@@ -245,12 +291,13 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     % Generate colormap
                     % cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
-                    % Create heatmap overlay using your create_heatmap_overlay utility
-                    overlay_img = visualization.get_red_overlay(img1, img2reg, 'all', params);
+                    % Create red overlay using selected mask
+                    overlay_img = visualization.get_red_overlay(img1, img2reg, selectedMask, params);
 
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
-                    title(app.ResultAxes, sprintf('Red Overlay: %s → %s', ...
+                    title(app.ResultAxes, sprintf('Red Overlay (%s): %s → %s', ...
+                        selectedMask, ...
                         strrep(app.ImageDropDown2.Value, '_', ' '), ...
                         strrep(app.ImageDropDown1.Value, '_', ' ')));
 
@@ -401,42 +448,68 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 'Position', [20 540 180 30], ...
                 'ButtonPushedFcn', @(btn, event) LoadFolderButtonPushed(app));
 
-            % Change Type Radio Group
+            % Change Type Radio Group - Updated to include all mask categories
             app.ChangeTypeGroup = uibuttongroup(app.UIFigure, ...
-                'Title', 'Type of Change', ...
-                'Position', [20 400 180 120]);
+                'Title', 'Mask Category', ...
+                'Position', [20 350 180 180]);
 
-            app.ForestButton = uiradiobutton(app.ChangeTypeGroup, ...
-                'Text', 'Forest', ...
-                'Position', [10 80 100 20]);
+            % Create radio buttons for all valid categories
+            app.AllButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'All', ...
+                'Position', [10 150 80 20], ...
+                'Value', true); % Default selection
 
             app.CityButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'City', ...
-                'Position', [10 60 100 20]);
-
-            app.InfraButton = uiradiobutton(app.ChangeTypeGroup, ...
-                'Text', 'Infrastructure', ...
-                'Position', [10 40 100 20]);
+                'Position', [90 150 80 20]);
 
             app.WaterButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Water', ...
-                'Position', [10 20 100 20]);
+                'Position', [10 130 80 20]);
+
+            app.ForestButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Forest', ...
+                'Position', [90 130 80 20]);
+
+            app.IceButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Ice', ...
+                'Position', [10 110 80 20]);
+
+            app.DesertButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Desert', ...
+                'Position', [90 110 80 20]);
+
+            app.FeldButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Feld', ...
+                'Position', [10 90 80 20]);
+
+            app.GlacierButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Glacier', ...
+                'Position', [90 90 80 20]);
+
+            app.FrauenkircheButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Frauenkirche', ...
+                'Position', [10 70 80 20]);
+
+            app.OktoberfestButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Oktoberfest', ...
+                'Position', [90 70 80 20]);
 
             % Visualization Type Dropdown
             app.VisualizationDropDown = uidropdown(app.UIFigure, ...
                 'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap', 'Red Overlay'}, ...
                 'Value', 'Flicker', ...
-                'Position', [20 360 180 30]);
+                'Position', [20 310 180 30]);
 
             % Toggle button to show/hide advanced settings
             app.AdvancedToggle = uibutton(app.UIFigure, 'push', ...
                 'Text', 'Show Advanced Settings ▼', ...
-                'Position', [20 320 180 30], ...
+                'Position', [20 270 180 30], ...
                 'ButtonPushedFcn', @(btn, event) toggleAdvancedPanel(app));
 
             % --- Advanced Settings Collapsible Section ---
             app.AdvancedPanel = uipanel(app.UIFigure, ...
-                'Position', [20 150 180 170], ... % moved down below toggle button
+                'Position', [20 100 180 170], ... % moved down below toggle button
                 'FontWeight', 'bold', ...
                 'BackgroundColor', [0.97 0.97 0.97], ...
                 'Visible', 'off'); % Start collapsed
@@ -481,7 +554,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
             % Info Text Area (in a panel for border)
             app.infoPanel = uipanel(app.UIFigure, ...
-                'Position', [20 190 180 60], ... % Always between advanced panel and visualize button
+                'Position', [20 140 180 60], ... % Always between advanced panel and visualize button
                 'BorderType', 'line', ...
                 'Title', '');
 
@@ -559,7 +632,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             % Visualize Button (right column, always visible)
             app.VisualizeButton = uibutton(app.UIFigure, 'push', ...
                 'Text', 'Visualize', ...
-                'Position', [20 150 180 40], ... % X=20, width=180, Y=150 puts it below InfoTextArea
+                'Position', [20 100 180 40], ... % X=20, width=180, Y=100 puts it below InfoTextArea
                 'ButtonPushedFcn', @(btn, event) onVisualizeButtonPressed(app), ...
                 'FontWeight', 'bold', ...
                 'FontSize', 16, ...

@@ -46,10 +46,12 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
 
     try
         % Call classifyImageByColor to get category-specific masks
-        [~, ~, ~, masks] = classifyImageByColor(reference_image);
+        % [~, ~, ~, masks] = classifyImageByColor(reference_image);
 
         % Map category names and select appropriate mask
-        terrain_mask = get_category_mask(masks, category);
+        [terrain_mask_ref, ~] = masks.category_masks(ref_img, category);
+        [terrain_mask_img, ~] = masks.category_masks(img, category);
+        terrain_mask_united = terrain_mask_ref | terrain_mask_img;
         fprintf('Terrain mask generated successfully using HSV classification.\n');
     catch ME
         fprintf('Warning: get_category_mask function not available. Using partial image mask.\n');
@@ -88,7 +90,7 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
     change_mask = diff_image_smooth > thr;
 
     % Apply terrain mask - only consider changes in relevant areas
-    masked_change = change_mask & terrain_mask;
+    masked_change = change_mask & terrain_mask_united;
 
     % Create red overlay visualization
     overlay_image = img;
@@ -133,7 +135,7 @@ function [is_valid, message] = input_validation(ref_img, img, category)
     end
 
     % Check category is valid
-    valid_categories = {'all', 'city', 'water', 'forrest', 'ice', 'desert', 'farmland'};
+    valid_categories = {'all', 'city', 'water', 'forest', 'ice', 'desert', 'feld', 'glacier', 'frauenkirche', 'oktoberfest'};
 
     if ~ismember(category, valid_categories)
         message = sprintf('Invalid category: %s. Must be one of: %s', category, strjoin(valid_categories, ', '));
