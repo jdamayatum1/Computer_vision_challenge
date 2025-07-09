@@ -1,3 +1,4 @@
+
 classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
     properties (Access = public)
@@ -113,6 +114,19 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             updateImagePreview(app, 1);
             updateImagePreview(app, 2);
 
+            % Link all axes for synchronized zoom and pan after images are loaded
+            linkaxes([app.ImageAxes1, app.ImageAxes2, app.ResultAxes], 'xy');
+
+            % Reset axis limits to ensure proper initial view
+            axis(app.ImageAxes1, 'image');
+            axis(app.ImageAxes2, 'image');
+            axis(app.ResultAxes, 'image');
+
+            % Turn off axis visibility
+            axis(app.ImageAxes1, 'off');
+            axis(app.ImageAxes2, 'off');
+            axis(app.ResultAxes, 'off');
+
             % Update info
             app.InfoTextArea.Value = sprintf('Loaded and registered %d images.', numel(names));
 
@@ -185,14 +199,14 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
                 case 'Overlay'
                     blend = 0.5 * im2double(img1) + 0.5 * im2double(img2reg);
-                    imshow(blend, 'Parent', app.ResultAxes);
+                    imshow(blend, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                     title(app.ResultAxes, sprintf('Registered Overlay: %s → %s', ...
                         strrep(app.ImageDropDown2.Value, '_', ' '), ...
                         strrep(app.ImageDropDown1.Value, '_', ' ')));
 
                 case 'Absolute Difference'
                     diff_img = imabsdiff(im2double(img1), im2double(img2reg));
-                    imshow(diff_img, 'Parent', app.ResultAxes);
+                    imshow(diff_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                     title(app.ResultAxes, 'Absolute Difference');
 
                 case 'Heatmap'
@@ -207,14 +221,36 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     params.colormap_name = app.HeatmapColorMapDropDown.Value;
 
                     % Generate colormap
-                    cmap = visualization.get_heatmap_colormap(params.colormap_name);
+                    % cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
                     % Create heatmap overlay using your create_heatmap_overlay utility
-                    overlay_img = visualization.create_heatmap_overlay(img1, img2reg, 'all', params);
+                    overlay_img = visualization.get_heatmap_overlay(img1, img2reg, 'all', params);
 
                     % Display result
-                    imshow(overlay_img, 'Parent', app.ResultAxes);
+                    imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                     title(app.ResultAxes, sprintf('Heatmap Overlay: %s → %s', ...
+                        strrep(app.ImageDropDown2.Value, '_', ' '), ...
+                        strrep(app.ImageDropDown1.Value, '_', ' ')));
+
+                case 'Red Overlay'
+                    % Get selected registered images
+                    [img1, img2reg] = getRegisteredImagePair(app);
+                    if isempty(img1) || isempty(img2reg), return; end
+
+                    % Read advanced parameters from GUI
+                    params = struct();
+                    params.alpha = app.HeatmapAlphaSlider.Value;
+                    params.gaussian_sigma = app.GaussianSigmaSlider.Value;
+
+                    % Generate colormap
+                    % cmap = visualization.get_heatmap_colormap(params.colormap_name);
+
+                    % Create heatmap overlay using your create_heatmap_overlay utility
+                    overlay_img = visualization.get_red_overlay(img1, img2reg, 'all', params);
+
+                    % Display result
+                    imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    title(app.ResultAxes, sprintf('Red Overlay: %s → %s', ...
                         strrep(app.ImageDropDown2.Value, '_', ' '), ...
                         strrep(app.ImageDropDown1.Value, '_', ' ')));
 
@@ -256,6 +292,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             % Display registered image
             img = app.RegisteredImages{idx};
             imshow(img, 'Parent', ax);
+            axis(ax, 'image');
             axis(ax, 'off');
             title(ax, axTitle);
         end
@@ -387,7 +424,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
             % Visualization Type Dropdown
             app.VisualizationDropDown = uidropdown(app.UIFigure, ...
-                'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap'}, ...
+                'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap', 'Red Overlay'}, ...
                 'Value', 'Flicker', ...
                 'Position', [20 360 180 30]);
 

@@ -33,8 +33,8 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
             use_otsu_threshold = true;
         end
 
-        alpha = helpers('getfield_default', inputParams, 'alpha', 0.5);
-        gaussian_sigma = helpers('getfield_default', inputParams, 'gaussian_sigma', 1.0);
+        alpha = inputParams.alpha;
+        gaussian_sigma = inputParams.gaussian_sigma;
     else
         alpha = 0.5;
         gaussian_sigma = 1.0;
@@ -51,14 +51,12 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
         % Map category names and select appropriate mask
         terrain_mask = get_category_mask(masks, category);
         fprintf('Terrain mask generated successfully using HSV classification.\n');
-        terrain_mask = get_terrain_mask(ref_img, category);
-        fprintf('Terrain mask generated successfully.\n');
     catch ME
-        fprintf('Warning: get_terrain_mask function not available. Using partial image mask.\n');
+        fprintf('Warning: get_category_mask function not available. Using partial image mask.\n');
         fprintf('Error: %s\n', ME.message);
         % Create a partial mask as fallback (exclude left half)
         terrain_mask = true(size(rgb2gray(ref_img)));
-        terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
+        % terrain_mask(:, 1:size(terrain_mask, 2) / 2) = false;
     end
 
     %% 4. CHANGE DETECTION
@@ -67,6 +65,12 @@ function overlay_image = get_red_overlay(ref_img, img, category, inputParams)
     % Convert images to grayscale
     ref_img_gray = rgb2gray(ref_img);
     img_gray = rgb2gray(img);
+
+    % get the mask of black pixels in the rotated image
+    black_mask = img_gray == 0;
+
+    % set the pixels in reference image to black
+    ref_img_gray(black_mask) = 0;
 
     % Compute smoothed difference
     diff_image_smooth = get_smoothed_grayscale_diffs(ref_img_gray, img_gray, gaussian_sigma);

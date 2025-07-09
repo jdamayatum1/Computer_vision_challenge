@@ -64,6 +64,12 @@ function overlay_image = get_heatmap_overlay(ref_img, img, category, inputParams
     ref_img_gray = rgb2gray(ref_img);
     img_gray = rgb2gray(img);
 
+    % get the mask of black pixels in the rotated image
+    black_mask = img_gray == 0;
+
+    % set the pixels in reference image to black
+    ref_img_gray(black_mask) = 0;
+
     % Compute smoothed difference
     diff_image_smooth = get_smoothed_grayscale_diffs(ref_img_gray, img_gray, gaussian_sigma);
 
