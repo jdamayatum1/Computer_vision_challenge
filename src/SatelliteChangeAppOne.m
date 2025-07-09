@@ -12,15 +12,15 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         CityButton matlab.ui.control.RadioButton
         InfraButton matlab.ui.control.RadioButton
         WaterButton matlab.ui.control.RadioButton
-        
+
         VisualizationDropDown matlab.ui.control.DropDown
-        
+
         InfoTextArea matlab.ui.control.TextArea
         infoPanel matlab.ui.container.Panel
         CurrentVisMode string = 'Flicker' % Default visualization mode
         PlaybackTimer timer
         IsPlaying logical = false
-        
+
         FlickerState logical = false
         TimelapseFrames cell
         TimelapseFrameIndex double = 1
@@ -44,7 +44,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         AdvancedPanel matlab.ui.container.Panel
         AdvancedCheck matlab.ui.control.CheckBox
         AdvancedToggle matlab.ui.control.Button
-        
+
         ImageFolder string
         ImageFiles struct
         Images cell
@@ -58,11 +58,13 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             if folder == 0, return; end
 
             % Find all valid image files
-            exts = {'*.jpg','*.jpeg','*.png','*.tif','*.tiff'};
+            exts = {'*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff'};
             imageFiles = [];
+
             for i = 1:numel(exts)
                 imageFiles = [imageFiles; dir(fullfile(folder, exts{i}))];
             end
+
             if isempty(imageFiles)
                 uialert(app.UIFigure, 'No supported images found.', 'Error');
                 return;
@@ -92,16 +94,19 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
             for k = 1:numel(imageFiles)
                 moving_img = app.getImageByIndex(k);
+
                 try
                     reg = registration.registerImagesSURF(moving_img, ref_img);
                     app.RegisteredImages{k} = reg.registered;
                 catch
                     app.RegisteredImages{k} = moving_img; % fallback to raw
                 end
+
                 h.Value = k / numel(imageFiles);
                 h.Message = sprintf('Registering image %d of %d...', k, numel(imageFiles));
                 drawnow;
             end
+
             close(h);
 
             % Update previews
@@ -120,7 +125,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             filepath = fullfile(app.ImageFiles(idx).folder, app.ImageFiles(idx).name);
             img = imread(filepath);
         end
-        
+
         function [img1, img2reg] = getRegisteredImagePair(app)
             idx1 = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
             idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
@@ -201,27 +206,11 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     params.gaussian_sigma = app.GaussianSigmaSlider.Value;
                     params.colormap_name = app.HeatmapColorMapDropDown.Value;
 
-                    % Convert to grayscale
-                    ref_img_gray = rgb2gray(img1);
-                    img2_gray = rgb2gray(img2reg);
-
-                    % Compute absolute difference and smooth
-                    diff_image = abs(double(ref_img_gray) - double(img2_gray));
-                    diff_image_smooth = imgaussfilt(diff_image, params.gaussian_sigma, 'FilterSize', 5);
-
-                    % Determine threshold using Otsu if not set explicitly in GUI
-                    if isfield(params, 'threshold') && ~isempty(params.threshold)
-                        thr = params.threshold;
-                    else
-                        norm_diff = mat2gray(diff_image_smooth);
-                        thr = graythresh(norm_diff) * (max(diff_image_smooth(:)) - min(diff_image_smooth(:))) + min(diff_image_smooth(:));
-                    end
-
                     % Generate colormap
                     cmap = visualization.get_heatmap_colormap(params.colormap_name);
 
                     % Create heatmap overlay using your create_heatmap_overlay utility
-                    overlay_img = visualization.create_heatmap_overlay(img2reg, diff_image_smooth, thr, params.alpha, cmap);
+                    overlay_img = visualization.create_heatmap_overlay(img1, img2reg, 'all', params);
 
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes);
@@ -229,12 +218,12 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                         strrep(app.ImageDropDown2.Value, '_', ' '), ...
                         strrep(app.ImageDropDown1.Value, '_', ' ')));
 
-
             end
+
         end
 
-
         function updateImagePreview(app, index)
+
             if index == 1
                 ax = app.ImageAxes1;
                 dropdown = app.ImageDropDown1;
@@ -271,7 +260,6 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             title(ax, axTitle);
         end
 
-
         function onPlayButtonPressed(app)
             % Stop if already playing
             if app.IsPlaying
@@ -286,6 +274,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
             % Reset timelapse state
             if strcmp(app.CurrentVisMode, 'Timelapse')
+
                 if isempty(app.TimelapseFrames)
                     % Initialize timelapse frames if not already done
                     idx1 = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
@@ -298,48 +287,57 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     app.TimelapseFrames = app.RegisteredImages(low:high);
                     app.TimelapseFrameIndex = 1;
                 end
-            end
 
+            end
 
             % Use SpeedSlider value for timer period (lower = faster)
             minPeriod = 0.1;
             maxPeriod = 2;
             sliderVal = app.SpeedSlider.Value;
-            period = minPeriod + (maxPeriod - minPeriod) * (1 - (sliderVal - minPeriod)/(maxPeriod - minPeriod));
+            period = minPeriod + (maxPeriod - minPeriod) * (1 - (sliderVal - minPeriod) / (maxPeriod - minPeriod));
             period = max(minPeriod, min(maxPeriod, period));
 
             % Create a new timer
             app.PlaybackTimer = timer( ...
                 'ExecutionMode', 'fixedSpacing', ...
                 'Period', period, ...
-                'TimerFcn', @(~,~) runPlaybackStep(app));
+                'TimerFcn', @(~, ~) runPlaybackStep(app));
 
             start(app.PlaybackTimer);
         end
 
         function onPauseButtonPressed(app)
             app.IsPlaying = false;
+
             if ~isempty(app.PlaybackTimer) && isvalid(app.PlaybackTimer)
                 stop(app.PlaybackTimer);
                 delete(app.PlaybackTimer);
             end
+
         end
 
         function runPlaybackStep(app)
+
             switch app.CurrentVisMode
                 case 'Flicker'
                     visualization.flicker_visualization(app);
                 case 'Timelapse'
                     visualization.timelapse_visualization(app);
             end
+
         end
+
         function onSpeedSliderChanged(app, ~)
+
             if app.IsPlaying
-                onPauseButtonPressed(app);   % Stop current timer
-                onPlayButtonPressed(app);    % Restart with new speed
+                onPauseButtonPressed(app); % Stop current timer
+                onPlayButtonPressed(app); % Restart with new speed
             end
+
         end
+
         function toggleAdvancedPanel(app)
+
             if strcmp(app.AdvancedPanel.Visible, 'off')
                 app.AdvancedPanel.Visible = 'on';
                 app.AdvancedToggle.Text = 'Hide Advanced Settings ▲';
@@ -347,6 +345,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 app.AdvancedPanel.Visible = 'off';
                 app.AdvancedToggle.Text = 'Show Advanced Settings ▼';
             end
+
         end
 
     end
@@ -404,8 +403,6 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 'FontWeight', 'bold', ...
                 'BackgroundColor', [0.97 0.97 0.97], ...
                 'Visible', 'off'); % Start collapsed
-
-
 
             % Heatmap Alpha Label
             app.HeatmapAlphaLabel = uilabel(app.AdvancedPanel, ...
@@ -480,7 +477,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             % Dropdowns placed directly beneath each preview image
             app.ImageDropDown1 = uidropdown(app.UIFigure, ...
                 'Items', {}, ...
-                'Position', [220 380 250 30]);  % Y = 380 aligns closely below
+                'Position', [220 380 250 30]); % Y = 380 aligns closely below
 
             app.ImageDropDown2 = uidropdown(app.UIFigure, ...
                 'Items', {}, ...
@@ -535,6 +532,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             app.VisualizationDropDown.ValueChangedFcn = @(dd, event) onVisualizationModeChanged(app);
             uistack(app.AdvancedPanel, 'top');
         end
+
     end
 
     methods (Access = public)
@@ -542,5 +540,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         function app = SatelliteChangeAppOne
             createComponents(app);
         end
+
     end
+
 end
