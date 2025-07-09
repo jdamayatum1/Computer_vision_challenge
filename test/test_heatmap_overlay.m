@@ -10,22 +10,19 @@ fprintf('=== Testing get_heatmap_overlay function with Dubai images ===\n');
 
 %% Configuration
 % Base path to the datasets (adjust if needed)
-base_path = '../challenge/Datasets/Dubai/';
+base_path = '/Users/jskupien/studium/Computer Vision/challenge/Datasets/Dubai';
 
 % Define image paths - using Dubai images from different years
 image_paths = {
-               fullfile(base_path, '12_1995.jpg'), % Before image
-               fullfile(base_path, '12_2000.jpg') % After image (will be rotated)
+               fullfile(base_path, '12_1995.jpg'), % Reference image
+               fullfile(base_path, '12_2000.jpg') % Comparison image (will be rotated)
                };
 
-% Reference image (main picture for alignment)
-main_picture_path = fullfile(base_path, '12_1995.jpg');
-
 % Test parameters
-is_new_file_list = true; % Force preprocessing
-category = 'city'; % Dubai is a city development
+category = 'desert'; % Dubai is a city development
+rotation_angle = -8.9; % Rotation to apply to second image
 
-% Input parameters with rotation
+% Input parameters for heatmap overlay
 inputParams = struct();
 % Test both explicit threshold and Otsu's method
 test_otsu = true; % Set to false to use explicit threshold (0.12)
@@ -38,9 +35,6 @@ else
     % Don't set threshold - let Otsu's method determine it
 end
 
-inputParams.rotation_angle = -8.9; % Rotate by -8.9 degrees as requested
-inputParams.dx = 0; % No horizontal translation
-inputParams.dy = 0; % No vertical translation
 inputParams.alpha = 0.6; % Semi-transparent heatmap overlay
 inputParams.gaussian_sigma = 1.2; % Gaussian smoothing for noise reduction
 inputParams.colormap_name = 'jet'; % Colormap for heatmap visualization
@@ -63,15 +57,37 @@ for i = 1:length(image_paths)
 
 end
 
-if ~exist(main_picture_path, 'file')
-    error('Main picture not found: %s', main_picture_path);
-else
-    fprintf('  ✓ Reference image: %s\n', main_picture_path);
-end
-
 %% Add source directory to path
 addpath('../src/');
+addpath('../src/+visualization/');
 addpath('../src/overlay/');
+
+%% Load and preprocess images
+fprintf('\n=== Loading and preprocessing images ===\n');
+
+% Load images
+fprintf('Loading reference image...\n');
+ref_img = imread(image_paths{1});
+fprintf('Loading comparison image...\n');
+img_original = imread(image_paths{2});
+
+% Apply rotation to the second image
+fprintf('Applying rotation of %.1f degrees to comparison image...\n', rotation_angle);
+img_rotated = imrotate(img_original, rotation_angle, 'bilinear', 'crop');
+
+% Ensure images are the same size (crop if needed after rotation)
+[ref_h, ref_w, ~] = size(ref_img);
+[img_h, img_w, ~] = size(img_rotated);
+
+if ref_h ~= img_h || ref_w ~= img_w
+    fprintf('Resizing images to match dimensions...\n');
+    % Resize to match reference image dimensions
+    img_rotated = imresize(img_rotated, [ref_h, ref_w]);
+end
+
+fprintf('Image preprocessing complete.\n');
+fprintf('Reference image size: %dx%d\n', ref_h, ref_w);
+fprintf('Comparison image size: %dx%d\n', size(img_rotated, 1), size(img_rotated, 2));
 
 %% Run the test
 fprintf('\n=== Running get_heatmap_overlay function ===\n');
@@ -84,136 +100,77 @@ else
     fprintf('  Threshold: Will be determined by Otsu''s method\n');
 end
 
-fprintf('  Rotation: %.1f degrees\n', inputParams.rotation_angle);
+fprintf('  Rotation applied: %.1f degrees\n', rotation_angle);
 fprintf('  Alpha blending: %.1f\n', inputParams.alpha);
 fprintf('  Gaussian sigma: %.1f\n', inputParams.gaussian_sigma);
 fprintf('  Colormap: %s\n', inputParams.colormap_name);
 
 try
-    % Call the main function
+    % Call the refactored function
     tic;
-    [processed_images, gui_params] = get_heatmap_overlay( ...
-        image_paths, ...
-        main_picture_path, ...
-        is_new_file_list, ...
-        category, ...
-        inputParams);
+    overlay_image = visualization.get_heatmap_overlay(ref_img, img_rotated, category, inputParams);
     elapsed_time = toc;
 
     fprintf('\n=== Test Results ===\n');
     fprintf('Processing completed successfully!\n');
     fprintf('Elapsed time: %.2f seconds\n', elapsed_time);
-    fprintf('Number of processed images: %d\n', length(processed_images));
-
-    % Display statistics
-    fprintf('\n=== Change Detection Statistics ===\n');
-    fprintf('Determined threshold: %.4f\n', gui_params.threshold);
-    fprintf('Average change: %.2f%%\n', gui_params.avg_change_percentage);
-    fprintf('Maximum change: %.2f%%\n', gui_params.max_change_percentage);
-    fprintf('Minimum change: %.2f%%\n', gui_params.min_change_percentage);
-
-    % Display individual image results
-    fprintf('\nIndividual Results:\n');
-
-    for i = 1:length(gui_params.detected_changes)
-        fprintf('  Image %d: %.2f%% change, confidence: %.3f\n', ...
-            i, gui_params.detected_changes(i) * 100, gui_params.confidence_scores(i));
-    end
+    fprintf('Output image size: %dx%d\n', size(overlay_image, 1), size(overlay_image, 2));
 
     %% Display results
     fprintf('\n=== Displaying Results ===\n');
 
     % Create figure for visualization
-    figure('Name', 'Heatmap Overlay Test Results - Dubai', 'Position', [100, 100, 1400, 900]);
-
-    % Load original images for comparison
-    img1 = imread(image_paths{1});
-    img2 = imread(image_paths{2});
+    figure('Name', 'Heatmap Overlay Test Results - Dubai', 'Position', [100, 100, 1400, 700]);
 
     % Create subplot areas and store axes handles for synchronization
-    ax1 = subplot(2, 4, 1);
-    imshow(img1);
-    title('Original 1995 (Reference)');
+    ax1 = subplot(2, 3, 1);
+    imshow(ref_img);
+    title('Reference 1995');
 
-    ax2 = subplot(2, 4, 2);
-    imshow(img2);
-    title('Original 2000 (Before Rotation)');
+    ax2 = subplot(2, 3, 2);
+    imshow(img_original);
+    title('Original 2000');
 
-    % Display terrain mask if available
-    ax3 = subplot(2, 4, 3);
+    ax3 = subplot(2, 3, 3);
+    imshow(img_rotated);
+    title(sprintf('Rotated 2000 (%.1f°)', rotation_angle));
 
-    if isfield(gui_params, 'terrain_mask')
-        imshow(gui_params.terrain_mask);
-        title(sprintf('Terrain Mask (%s)', category));
-    else
-        text(0.5, 0.5, 'No terrain mask available', 'HorizontalAlignment', 'center');
-        title('Terrain Mask (Not Available)');
-    end
+    ax4 = subplot(2, 3, 4);
+    imshow(overlay_image);
+    title('Heatmap Overlay Result');
 
     % Display colormap reference
-    ax4 = subplot(2, 4, 4);
+    ax5 = subplot(2, 3, 5);
     colormap_sample = repmat(linspace(0, 1, 256)', 1, 50);
     imshow(colormap_sample, 'Colormap', eval(sprintf('%s(256)', current_colormap)));
     title(sprintf('Colormap: %s', current_colormap));
     ylabel('Intensity →', 'Rotation', 90);
 
-    % Display processed images with heatmap overlay
-    axes_to_link = [ax1, ax2, ax3]; % Initialize with first three axes
-
-    for i = 1:min(length(processed_images), 2) % Show up to 2 processed images
-        ax_processed = subplot(2, 4, 4 + i);
-        imshow(processed_images{i});
-        title(sprintf('Heatmap Overlay %d\nChange: %.2f%%', i, gui_params.detected_changes(i) * 100));
-        axes_to_link = [axes_to_link, ax_processed]; % Add to axes list
-    end
-
-    %% Link axes for synchronized zoom and pan (excluding colormap)
-    linkaxes(axes_to_link, 'xy');
-    fprintf('Axes synchronized for coordinated zoom and pan.\n');
-
-    % Display summary in the remaining subplot
-    subplot(2, 4, 7);
+    % Display summary
+    subplot(2, 3, 6);
     axis off;
-    % Handle threshold display in summary
-    if isfield(inputParams, 'threshold') && ~test_otsu
-        threshold_text = sprintf('%.3f (explicit)', inputParams.threshold);
-    else
-        threshold_text = sprintf('%.4f (Otsu)', gui_params.threshold);
-    end
 
     summary_text = sprintf(['Test Summary:\n\n' ...
                                 'Category: %s\n' ...
                                 'Rotation: %.1f°\n' ...
-                                'Threshold: %s\n' ...
                                 'Alpha: %.1f\n' ...
                                 'Colormap: %s\n\n' ...
-                                'Avg Change: %.2f%%\n' ...
-                                'Max Change: %.2f%%\n' ...
-                            'Processing Time: %.2fs'], ...
-        category, inputParams.rotation_angle, threshold_text, inputParams.alpha, ...
-        current_colormap, gui_params.avg_change_percentage, gui_params.max_change_percentage, elapsed_time);
+                                'Processing Time: %.2fs\n\n' ...
+                                'Press keys 1-5 to\n' ...
+                            'switch colormaps'], ...
+        category, rotation_angle, inputParams.alpha, current_colormap, elapsed_time);
 
     text(0.1, 0.9, summary_text, 'VerticalAlignment', 'top', 'FontSize', 9, 'FontName', 'FixedWidth');
 
-    % Interactive colormap testing
-    subplot(2, 4, 8);
-    axis off;
-    colormap_text = sprintf(['Interactive Options:\n\n' ...
-                                 'Available Colormaps:\n' ...
-                                 '1. jet (current)\n' ...
-                                 '2. hot\n' ...
-                                 '3. parula\n' ...
-                                 '4. turbo\n' ...
-                                 '5. plasma\n\n' ...
-                                 'Press keys 1-5 to\n' ...
-                             'switch colormaps']);
-    text(0.1, 0.9, colormap_text, 'VerticalAlignment', 'top', 'FontSize', 9, 'FontName', 'FixedWidth');
+    % Link axes for synchronized zoom and pan (excluding colormap and summary)
+    linkaxes([ax1, ax2, ax3, ax4], 'xy');
+    fprintf('Axes synchronized for coordinated zoom and pan.\n');
 
     fprintf('Visualization complete. Check the figure window.\n');
-    fprintf('Press keys 1-6 to test different colormaps interactively.\n');
+    fprintf('Press keys 1-5 to test different colormaps interactively.\n');
 
     %% Interactive colormap switching
-    set(gcf, 'KeyPressFcn', @(src, event) switchColormap(event, inputParams, image_paths, main_picture_path, is_new_file_list, category, test_colormaps));
+    set(gcf, 'KeyPressFcn', @(src, event) switchColormap(event, ref_img, img_rotated, category, inputParams, test_colormaps));
 
     %% Save results (optional)
     save_results = input('\nSave results to file? (y/n): ', 's');
@@ -221,7 +178,7 @@ try
     if strcmpi(save_results, 'y')
         timestamp = datestr(now, 'yyyymmdd_HHMMSS');
         results_file = sprintf('heatmap_test_results_%s.mat', timestamp);
-        save(results_file, 'processed_images', 'gui_params', 'inputParams', 'image_paths');
+        save(results_file, 'overlay_image', 'inputParams', 'ref_img', 'img_rotated');
         fprintf('Results saved to: %s\n', results_file);
 
         % Save figure
@@ -245,7 +202,7 @@ end
 fprintf('\n=== Heatmap overlay test completed successfully! ===\n');
 
 %% Interactive colormap switching callback function
-function switchColormap(event, inputParams, image_paths, main_picture_path, is_new_file_list, category, test_colormaps)
+function switchColormap(event, ref_img, img_rotated, category, inputParams, test_colormaps)
     key = event.Key;
     colormap_idx = str2double(key);
 
@@ -258,43 +215,33 @@ function switchColormap(event, inputParams, image_paths, main_picture_path, is_n
 
         try
             % Re-run the heatmap overlay with new colormap
-            [processed_images_new, gui_params_new] = get_heatmap_overlay( ...
-                image_paths, ...
-                main_picture_path, ...
-                is_new_file_list, ...
-                category, ...
-                inputParams);
+            overlay_image_new = visualization.get_heatmap_overlay(ref_img, img_rotated, category, inputParams);
 
-            % Update the processed image displays
-            for i = 1:min(length(processed_images_new), 2)
-                subplot(2, 4, 4 + i);
-                imshow(processed_images_new{i});
-                title(sprintf('Heatmap Overlay %d (%s)\nChange: %.2f%%', ...
-                    i, selected_colormap, gui_params_new.detected_changes(i) * 100));
-            end
+            % Update the overlay display
+            subplot(2, 3, 4);
+            imshow(overlay_image_new);
+            title(sprintf('Heatmap Overlay (%s)', selected_colormap));
 
             % Update colormap reference
-            subplot(2, 4, 4);
+            subplot(2, 3, 5);
             colormap_sample = repmat(linspace(0, 1, 256)', 1, 50);
             imshow(colormap_sample, 'Colormap', eval(sprintf('%s(256)', selected_colormap)));
             title(sprintf('Colormap: %s', selected_colormap));
             ylabel('Intensity →', 'Rotation', 90);
 
             % Update summary
-            subplot(2, 4, 7);
+            subplot(2, 3, 6);
             cla;
             axis off;
-            threshold_text = sprintf('%.4f (Otsu)', gui_params_new.threshold);
             summary_text = sprintf(['Test Summary:\n\n' ...
                                         'Category: %s\n' ...
                                         'Rotation: %.1f°\n' ...
-                                        'Threshold: %s\n' ...
                                         'Alpha: %.1f\n' ...
                                         'Colormap: %s\n\n' ...
-                                        'Avg Change: %.2f%%\n' ...
-                                    'Max Change: %.2f%%'], ...
-                category, inputParams.rotation_angle, threshold_text, inputParams.alpha, ...
-                selected_colormap, gui_params_new.avg_change_percentage, gui_params_new.max_change_percentage);
+                                        'Processing Time: N/A\n\n' ...
+                                        'Press keys 1-5 to\n' ...
+                                    'switch colormaps'], ...
+                category, -8.9, inputParams.alpha, selected_colormap);
             text(0.1, 0.9, summary_text, 'VerticalAlignment', 'top', 'FontSize', 9, 'FontName', 'FixedWidth');
 
             fprintf('Colormap updated successfully!\n');
