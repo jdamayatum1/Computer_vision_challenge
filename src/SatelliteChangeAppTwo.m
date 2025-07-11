@@ -39,7 +39,14 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
         GaussianSigmaLabel matlab.ui.control.Label
 
         ComputedOverlays struct % Stores overlays for all visualization methods
+        ComputedOverlaysStats struct % Stores stats for all visualization methods
         OverlaysComputed logical = false % Track if overlays are up-to-date
+
+        % Global indices for easier access
+        Indices struct % Contains img and imgRef fields for current image indices
+
+        % Track active overlay type for stats access
+        overlayType string = 'Heatmap' % Default overlay type for stats access
 
         ImageDropDown1 matlab.ui.control.DropDown
         ImageDropDown2 matlab.ui.control.DropDown
@@ -122,12 +129,67 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Callback when mask category radio button changes
             app.OverlaysComputed = false; % Mark overlays as outdated
             app.TimelapseFrames = {}; % Clear cached timelapse frames
+
+            % Auto-recompute and display
+            if ~isempty(app.RegisteredImages)
+                autoRecomputeAndDisplay(app);
+            end
+
         end
 
         function onParameterChanged(app, ~)
             % Callback when any overlay parameter changes (alpha, sigma, colormap)
             app.OverlaysComputed = false; % Mark overlays as outdated
             app.TimelapseFrames = {}; % Clear cached timelapse frames
+
+            % Auto-recompute and display
+            if ~isempty(app.RegisteredImages)
+                autoRecomputeAndDisplay(app);
+            end
+
+        end
+
+        function onReferenceImageChanged(app, ~)
+            % Callback when reference image (ImageDropDown1) changes
+
+            % Update global indices
+            app.Indices.imgRef = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
+
+            if ~isempty(app.RegisteredImages)
+                % Re-register all images against the new reference
+                reRegisterImagesAgainstNewReference(app);
+
+                % Update both image previews to show the newly registered images
+                updateImagePreview(app, 1);
+                updateImagePreview(app, 2);
+
+                % Mark overlays as outdated and auto-recompute
+                app.OverlaysComputed = false;
+                app.TimelapseFrames = {};
+                autoRecomputeAndDisplay(app);
+            else
+                % If no registered images yet, just update the preview
+                updateImagePreview(app, 1);
+            end
+
+        end
+
+        function onComparisonImageChanged(app, ~)
+            % Callback when comparison image (ImageDropDown2) changes
+
+            % Update global indices
+            app.Indices.img = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            updateImagePreview(app, 2);
+
+            % Just auto-display with existing overlays (no recomputation needed)
+            if ~isempty(app.RegisteredImages) && app.OverlaysComputed
+                autoDisplay(app);
+            elseif ~isempty(app.RegisteredImages)
+                % If overlays not computed yet, compute them first
+                autoRecomputeAndDisplay(app);
+            end
+
         end
 
         function LoadFolderButtonPushed(app, ~)
@@ -160,6 +222,10 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Set default selections
             app.ImageDropDown1.Value = names{1};
             app.ImageDropDown2.Value = names{min(2, numel(names))};
+
+            % Initialize global indices
+            app.Indices.imgRef = 1; % Reference image (first image)
+            app.Indices.img = min(2, numel(names)); % Comparison image (second image or first if only one)
 
             % Register images incrementally
             app.RegisteredImages = cell(1, numel(imageFiles)); % Preallocate
@@ -238,8 +304,24 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
         end
 
         function onVisualizationModeChanged(app, ~)
-            % Optionally, stop any running playback
+            % Stop any running playback
             onPauseButtonPressed(app);
+
+            % Update overlay type for stats access
+            switch app.VisualizationDropDown.Value
+                case 'Heatmap'
+                    app.overlayType = 'Heatmap';
+                case 'Red Overlay'
+                    app.overlayType = 'RedOverlay';
+                otherwise
+                    app.overlayType = 'Heatmap'; % Default to Heatmap for stats
+            end
+
+            % Auto-display with the new visualization mode
+            if ~isempty(app.RegisteredImages) && app.OverlaysComputed
+                autoDisplay(app);
+            end
+
         end
 
         function ensureOverlaysComputed(app)
@@ -272,7 +354,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             app.ComputedOverlays = struct('Overlay', cell(1, numImages), ...
                 'AbsoluteDifference', cell(1, numImages), ...
                 'Heatmap', cell(1, numImages), ...
-                'RedOverlay', cell(1, numImages));
+                'RedOverlay', cell(1, numImages), ...
+                'HeatmapStats', cell(1, numImages), ...
+                'RedOverlayStats', cell(1, numImages));
 
             % Stage 4: Compute overlays for all images based on mask regions
             h = uiprogressdlg(app.UIFigure, ...
@@ -292,23 +376,27 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
                 % Heatmap overlay (uses mask regions)
                 try
-                    [heatmapOverlay, ~] = visualization.get_heatmap_overlay(img1, img2, selectedMask, params);
+                    [heatmapOverlay, stats] = visualization.get_heatmap_overlay(img1, img2, selectedMask, params);
                     app.ComputedOverlays(i).Heatmap = heatmapOverlay;
+                    app.ComputedOverlays(i).HeatmapStats = stats;
                     fprintf('Heatmap overlay computed successfully for image %d\n', i);
                 catch ME
                     % Fallback to absolute difference if heatmap fails
                     app.ComputedOverlays(i).Heatmap = app.ComputedOverlays(i).AbsoluteDifference;
+                    app.ComputedOverlays(i).HeatmapStats = struct(); % Empty stats
                     warning('Heatmap computation failed for image %d: %s', i, ME.message);
                 end
 
                 % Red overlay (uses mask regions) - SAME processing flow as heatmap
                 try
-                    [redOverlay, ~] = visualization.get_red_overlay(img1, img2, selectedMask, params);
+                    [redOverlay, stats] = visualization.get_red_overlay(img1, img2, selectedMask, params);
                     app.ComputedOverlays(i).RedOverlay = redOverlay;
+                    app.ComputedOverlays(i).RedOverlayStats = stats;
                     fprintf('Red overlay computed successfully for image %d\n', i);
                 catch ME
                     % Fallback to absolute difference if red overlay fails
                     app.ComputedOverlays(i).RedOverlay = app.ComputedOverlays(i).AbsoluteDifference;
+                    app.ComputedOverlays(i).RedOverlayStats = struct(); % Empty stats
                     warning('Red overlay computation failed for image %d: %s', i, ME.message);
                 end
 
@@ -569,6 +657,96 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
         end
 
+        function reRegisterImagesAgainstNewReference(app)
+            % Re-register all images against the newly selected reference image
+            if isempty(app.RegisteredImages) || isempty(app.ImageDropDown1.Items)
+                return;
+            end
+
+            % Get the index of the new reference image
+            refIdx = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
+
+            if isempty(refIdx)
+                return;
+            end
+
+            h = uiprogressdlg(app.UIFigure, ...
+                'Title', 'Re-registering Images', ...
+                'Message', 'Please wait...', ...
+                'Indeterminate', 'off', ...
+                'Cancelable', 'off');
+
+            % Get the new reference image (load from original file)
+            ref_img = app.getImageByIndex(refIdx);
+
+            % Clear and rebuild the registered images array
+            app.RegisteredImages = cell(1, numel(app.ImageFiles));
+            app.RegisteredImages{refIdx} = ref_img; % Reference image stays as-is
+
+            % Register all other images against the new reference
+            for k = 1:numel(app.ImageFiles)
+
+                if k == refIdx
+                    continue; % Skip reference image
+                end
+
+                moving_img = app.getImageByIndex(k);
+
+                try
+                    reg = registration.registerImagesSURF(moving_img, ref_img);
+                    app.RegisteredImages{k} = reg.registered;
+                catch
+                    app.RegisteredImages{k} = moving_img; % Fallback to raw image
+                end
+
+                h.Value = k / numel(app.ImageFiles);
+                h.Message = sprintf('Re-registering image %d of %d against new reference...', k, numel(app.ImageFiles));
+                drawnow;
+            end
+
+            close(h);
+
+            % Update info
+            app.InfoTextArea.Value = sprintf('Re-registered %d images against new reference: %s', ...
+                numel(app.ImageFiles), strrep(app.ImageDropDown1.Value, '_', ' '));
+        end
+
+        function autoRecomputeAndDisplay(app)
+            % Automatically recompute overlays and display result
+            computeOverlays(app);
+            autoDisplay(app);
+        end
+
+        function autoDisplay(app)
+            % Automatically display the current visualization without manual button press
+            if isempty(app.ComputedOverlays)
+                return;
+            end
+
+            % Get selected visualization method
+            mode = app.VisualizationDropDown.Value;
+            fieldName = getVisualizationFieldName(app, mode);
+            selectedMask = getSelectedMask(app);
+
+            % Display the overlay for the selected second image
+            idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            if ~isempty(idx2) && idx2 <= numel(app.ComputedOverlays)
+                % Verify the overlay exists
+                if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
+                    overlayImage = app.ComputedOverlays(idx2).(fieldName);
+                    imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    title(app.ResultAxes, sprintf('%s (%s): %s → %s', ...
+                        mode, selectedMask, ...
+                        strrep(app.ImageDropDown1.Value, '_', ' '), ...
+                        strrep(app.ImageDropDown2.Value, '_', ' ')));
+                    fprintf('Auto-displayed %s overlay for image %d\n', mode, idx2);
+                end
+
+            end
+
+        end
+
     end
 
     methods (Access = private)
@@ -734,8 +912,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Items', {}, ...
                 'Position', [500 380 250 30]);
 
-            app.ImageDropDown1.ValueChangedFcn = @(dd, event) updateImagePreview(app, 1);
-            app.ImageDropDown2.ValueChangedFcn = @(dd, event) updateImagePreview(app, 2);
+            app.ImageDropDown1.ValueChangedFcn = @(dd, event) onReferenceImageChanged(app, event);
+            app.ImageDropDown2.ValueChangedFcn = @(dd, event) onComparisonImageChanged(app, event);
 
             % Main Visualization Output (in a panel for border)
             resultPanel = uipanel(app.UIFigure, ...
@@ -807,6 +985,20 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
         function app = SatelliteChangeAppTwo
             createComponents(app);
+
+            % Initialize global indices struct
+            app.Indices = struct('img', [], 'imgRef', []);
+
+            % Initialize overlay type based on default visualization mode
+            switch app.VisualizationDropDown.Value
+                case 'Heatmap'
+                    app.overlayType = 'Heatmap';
+                case 'Red Overlay'
+                    app.overlayType = 'RedOverlay';
+                otherwise
+                    app.overlayType = 'Heatmap'; % Default to Heatmap for stats
+            end
+
         end
 
     end
@@ -826,12 +1018,49 @@ function onShowMasksButtonPressed(app)
         return;
     end
 
-    % Generate binary mask and RGB-masked image using category_masks.m
-    [mask, rgbMaskedImage] = masks.category_masks(img1, selectedMask);
+    % Ensure overlays are computed
+    if ~app.OverlaysComputed || isempty(app.ComputedOverlays)
+        uialert(app.UIFigure, 'Please compute overlays first by clicking Visualize.', 'Error');
+        return;
+    end
+
+    % Get the current comparison image index
+    if isempty(app.Indices) || ~isfield(app.Indices, 'img') || isempty(app.Indices.img)
+        uialert(app.UIFigure, 'No comparison image selected.', 'Error');
+        return;
+    end
+
+    imgIdx = app.Indices.img;
+
+    % Get the img_united_mask from the stats of the active overlay type
+    img_united_mask = [];
+    statsFieldName = strcat(app.overlayType, 'Stats'); % e.g.,'HeatmapStats' or 'RedOverlayStats'
+    fprintf('Stats field name: %s\n', statsFieldName);
+
+    if imgIdx <= numel(app.ComputedOverlays) && ...
+            isfield(app.ComputedOverlays(1), statsFieldName) && ...
+            ~isempty(app.ComputedOverlays(imgIdx).(statsFieldName)) && ...
+            isfield(app.ComputedOverlays(imgIdx).(statsFieldName), 'img_united_mask')
+
+        img_united_mask = app.ComputedOverlays(imgIdx).(statsFieldName).img_united_mask;
+    end
+
+    % If no img_united_mask found in stats, fallback to generating it
+    if isempty(img_united_mask)
+        [img_united_mask, rgbMaskedImage] = masks.category_masks(img1, selectedMask);
+    else
+        % Generate RGB masked image from the retrieved mask
+        rgbMaskedImage = img1;
+
+        for c = 1:size(img1, 3)
+            rgbMaskedImage(:, :, c) = img1(:, :, c) .* uint8(img_united_mask);
+        end
+
+    end
 
     % Plot original, binary mask, and RGB-masked image
-    figure('Name', ['Category: ', selectedMask]);
-    subplot(1, 3, 1); imshow(img1); title('Original Image', 'FontWeight', 'bold');
-    subplot(1, 3, 2); imshow(mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
+    figure('Name', ['Category: ', selectedMask, ' - Image: ', app.ImageDropDown2.Value]);
+    subplot(1, 3, 1); imshow(img1); title('Reference Image', 'FontWeight', 'bold');
+    subplot(1, 3, 2); imshow(img_united_mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
     subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
 end
