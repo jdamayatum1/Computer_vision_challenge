@@ -192,7 +192,7 @@ function [is_valid, message] = input_validation(image_paths, main_picture_path, 
     end
 
     % Check category is valid
-    valid_categories = {'all', 'city', 'water', 'forrest', 'ice', 'desert', 'farmland'};
+    valid_categories = {'all', 'city', 'water', 'river', 'forrest', 'ice', 'desert', 'farmland'};
 
     if ~ismember(category, valid_categories)
         message = sprintf('Invalid category: %s. Must be one of: %s', category, strjoin(valid_categories, ', '));

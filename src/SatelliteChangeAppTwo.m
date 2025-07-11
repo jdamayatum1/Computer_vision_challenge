@@ -11,10 +11,11 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
         AllButton matlab.ui.control.RadioButton
         CityButton matlab.ui.control.RadioButton
         WaterButton matlab.ui.control.RadioButton
+        RiverButton matlab.ui.control.RadioButton
         ForestButton matlab.ui.control.RadioButton
         IceButton matlab.ui.control.RadioButton
         DesertButton matlab.ui.control.RadioButton
-        FeldButton matlab.ui.control.RadioButton
+        FieldButton matlab.ui.control.RadioButton
         GlacierButton matlab.ui.control.RadioButton
         FrauenkircheButton matlab.ui.control.RadioButton
         OktoberfestButton matlab.ui.control.RadioButton
@@ -88,14 +89,16 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                     selectedMask = 'city';
                 case app.WaterButton
                     selectedMask = 'water';
+                case app.RiverButton
+                    selectedMask = 'river';
                 case app.ForestButton
                     selectedMask = 'forest';
                 case app.IceButton
                     selectedMask = 'ice';
                 case app.DesertButton
                     selectedMask = 'desert';
-                case app.FeldButton
-                    selectedMask = 'feld';
+                case app.FieldButton
+                    selectedMask = 'field';
                 case app.GlacierButton
                     selectedMask = 'glacier';
                 case app.FrauenkircheButton
@@ -783,33 +786,37 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Text', 'Water', ...
                 'Position', [10 140 80 20]);
 
+            app.RiverButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'River', ...
+                'Position', [90 140 80 20]);
+
             app.ForestButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Forest', ...
-                'Position', [90 140 80 20]);
+                'Position', [10 120 80 20]);
 
             app.IceButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Ice', ...
-                'Position', [10 120 80 20]);
+                'Position', [90 120 80 20]);
 
             app.DesertButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Desert', ...
-                'Position', [90 120 80 20]);
-
-            app.FeldButton = uiradiobutton(app.ChangeTypeGroup, ...
-                'Text', 'Feld', ...
                 'Position', [10 100 80 20]);
+
+            app.FieldButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Field', ...
+                'Position', [90 100 80 20]);
 
             app.GlacierButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Glacier', ...
-                'Position', [90 100 80 20]);
+                'Position', [10 80 80 20]);
 
             app.FrauenkircheButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Frauenkirche', ...
-                'Position', [10 80 80 20]);
+                'Position', [90 80 80 20]);
 
             app.OktoberfestButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Oktoberfest', ...
-                'Position', [90 80 80 20]);
+                'Position', [10 60 80 20]);
 
             % Visualization Type Dropdown
             app.VisualizationDropDown = uidropdown(app.UIFigure, ...
