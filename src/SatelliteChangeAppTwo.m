@@ -427,8 +427,16 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 return;
             end
 
-            app.IsPlaying = true;
             app.CurrentVisMode = app.VisualizationDropDown.Value;
+
+            % Handle Static mode differently - no timer needed
+            if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                % For static mode, just run the playback step once
+                runPlaybackStep(app);
+                return;
+            end
+
+            app.IsPlaying = true;
 
             % Prepare/reset flicker state
             app.FlickerState = false;
@@ -514,6 +522,26 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         title(app.ResultAxes, sprintf('%s Timelapse - Frame %d/%d', ...
                             mode, app.TimelapseFrameIndex, numel(app.TimelapseFrames)));
                         app.TimelapseFrameIndex = mod(app.TimelapseFrameIndex, numel(app.TimelapseFrames)) + 1;
+                    end
+
+                case 'Static'
+                    % Static mode: Use existing preprocessed overlays from cells
+                    if isempty(idx2) || idx2 > numel(app.ComputedOverlays)
+                        return;
+                    end
+
+                    % Just take the right image from existing preprocessed cells
+                    if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
+                        overlayImage = app.ComputedOverlays(idx2).(fieldName);
+                        imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        title(app.ResultAxes, sprintf('%s Static Overlay: %s → %s', ...
+                            mode, ...
+                            strrep(app.ImageDropDown1.Value, '_', ' '), ...
+                            strrep(app.ImageDropDown2.Value, '_', ' ')));
+                        fprintf('Static mode: Displaying preprocessed %s overlay for image %d\n', mode, idx2);
+                    else
+                        uialert(app.UIFigure, sprintf('%s overlay not available. Please compute overlays first.', mode), 'Error');
+                        fprintf('ERROR: Static mode - %s overlay not found for image %d\n', mode, idx2);
                     end
 
             end
@@ -741,7 +769,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
             % Add Replay Mode Dropdown to the left of the Play button - CHANGE: Make it open upwards
             app.ReplayModeDropdown = uidropdown(app.UIFigure, ...
-                'Items', {'Flicker', 'Timelapse'}, ...
+                'Items', {'Flicker', 'Timelapse', 'Static'}, ...
                 'Value', 'Flicker', ...
                 'Position', [340 50 50 30]);
             % 'DropDirection', 'up'); % This makes the dropdown open upwards
