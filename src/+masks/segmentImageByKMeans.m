@@ -1,8 +1,8 @@
-function [segmentedImage, dominantMask, maskedRGB] = segmentImageByKMeans(image, numClusters)
-%SEGMENTIMAGEBYKMEANS Automatically segments an image using k-means clustering in LAB color space.
-% Returns the segmented image, binary mask of dominant cluster, and masked RGB result.
+function [segmentedImage, dominantMask, clusterMasksRGB, clusterColors] = segmentImageByKMeans(image, numClusters)
+%SEGMENTIMAGEBYKMEANS Segments an image using k-means into a variable number of clusters.
+% Returns segmented image, dominant mask, RGB-colored cluster masks, and cluster colors.
 
-  if nargin < 2
+    if nargin < 2
         numClusters = 3;
     end
 
@@ -24,18 +24,39 @@ function [segmentedImage, dominantMask, maskedRGB] = segmentImageByKMeans(image,
     [clusterIdx, ~] = kmeans(pixelData, numClusters, 'Distance','sqeuclidean', ...
                              'Replicates', 3, 'MaxIter', 1000);
     pixelLabels = reshape(clusterIdx, h, w);
-    segmentedImage = label2rgb(pixelLabels);
 
-    % Analyze cluster stats
+    % Generate distinguishable colors automatically
+    cmap = uint8(255 * lines(numClusters));
+    clusterColors = cmap;
+
+    % Create segmented image
+    segmentedImage = zeros(h, w, 3, 'uint8');
+    for k = 1:numClusters
+        mask = (pixelLabels == k);
+        for c = 1:3
+            segmentedImage(:,:,c) = segmentedImage(:,:,c) + clusterColors(k,c) .* uint8(mask);
+        end
+    end
+
+    % Create RGB-colored masks per cluster
+    clusterMasksRGB = zeros(h, w, 3, numClusters, 'uint8');
+    for k = 1:numClusters
+        mask = (pixelLabels == k);
+        rgbMask = zeros(h, w, 3, 'uint8');
+        for c = 1:3
+            rgbMask(:,:,c) = uint8(double(mask) * double(clusterColors(k,c)));
+        end
+        clusterMasksRGB(:,:,:,k) = rgbMask;
+    end
+
+    % Determine dominant cluster
     counts = histcounts(clusterIdx, 1:numClusters+1);
     totalPixels = h * w;
-    percent = counts / totalPixels;
 
-    % Heuristic: check each cluster's average HSV
     hsvImg = rgb2hsv(image);
     H = hsvImg(:,:,1); S = hsvImg(:,:,2); V = hsvImg(:,:,3);
-
     likelyWater = false(1, numClusters);
+
     for k = 1:numClusters
         mask = (pixelLabels == k);
         hAvg = mean(H(mask));
@@ -46,11 +67,9 @@ function [segmentedImage, dominantMask, maskedRGB] = segmentImageByKMeans(image,
         end
     end
 
-    % Choose dominant cluster with condition
     [sortedCounts, order] = sort(counts, 'descend');
     dominantCluster = order(1);
     if likelyWater(dominantCluster) && sortedCounts(1)/totalPixels < 0.5
-        % Choose next cluster that is not water
         for i = 2:numClusters
             if ~likelyWater(order(i))
                 dominantCluster = order(i);
@@ -60,15 +79,16 @@ function [segmentedImage, dominantMask, maskedRGB] = segmentImageByKMeans(image,
     end
 
     dominantMask = (pixelLabels == dominantCluster);
-    maskedRGB = image;
-    maskedRGB(repmat(~dominantMask,[1,1,3])) = 0;
 
-    % Plot
+    % Visualization
     figure;
-    subplot(2,2,1); imshow(image); title('Original Image');
-    subplot(2,2,2); imshow(segmentedImage); title('K-Means Segmentation');
-    subplot(2,2,3); imshow(dominantMask); title('Binary Mask (Dominant Cluster)');
-    subplot(2,2,4); imshow(maskedRGB); title('Masked RGB Region');
+    subplot(2, ceil((3+numClusters)/2), 1); imshow(image); title('Original Image');
+    subplot(2, ceil((3+numClusters)/2), 2); imshow(segmentedImage); title('Segmented Image');
+    subplot(2, ceil((3+numClusters)/2), 3); imshow(dominantMask); title('Dominant Mask');
 
-
+    for k = 1:numClusters
+        subplot(2, ceil((3+numClusters)/2), 3+k);
+        imshow(clusterMasksRGB(:,:,:,k));
+        title(sprintf('Cluster %d Mask', k));
+    end
 end
