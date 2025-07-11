@@ -51,6 +51,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
         ImageDropDown1 matlab.ui.control.DropDown
         ImageDropDown2 matlab.ui.control.DropDown
+        LeftArrowButton2 matlab.ui.control.Button
+        RightArrowButton2 matlab.ui.control.Button
         ImageAxes1 matlab.ui.control.UIAxes
         ImageAxes2 matlab.ui.control.UIAxes
         ResultAxes matlab.ui.control.UIAxes
@@ -193,6 +195,52 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 autoRecomputeAndDisplay(app);
             end
 
+        end
+
+        function onLeftArrowPressed(app, ~)
+            % Navigate to previous image in ImageDropDown2
+            if isempty(app.ImageDropDown2.Items)
+                return;
+            end
+
+            currentIdx = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            if isempty(currentIdx)
+                return;
+            end
+
+            % Move to previous image (wrap around to last if at first)
+            newIdx = currentIdx - 1;
+
+            if newIdx < 1
+                newIdx = length(app.ImageDropDown2.Items);
+            end
+
+            app.ImageDropDown2.Value = app.ImageDropDown2.Items{newIdx};
+            onComparisonImageChanged(app);
+        end
+
+        function onRightArrowPressed(app, ~)
+            % Navigate to next image in ImageDropDown2
+            if isempty(app.ImageDropDown2.Items)
+                return;
+            end
+
+            currentIdx = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            if isempty(currentIdx)
+                return;
+            end
+
+            % Move to next image (wrap around to first if at last)
+            newIdx = currentIdx + 1;
+
+            if newIdx > length(app.ImageDropDown2.Items)
+                newIdx = 1;
+            end
+
+            app.ImageDropDown2.Value = app.ImageDropDown2.Items{newIdx};
+            onComparisonImageChanged(app);
         end
 
         function LoadFolderButtonPushed(app, ~)
@@ -915,9 +963,22 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Items', {}, ...
                 'Position', [220 380 250 30]); % Y = 380 aligns closely below
 
+            % Image 2 navigation: Left arrow | dropdown | right arrow
+            app.LeftArrowButton2 = uibutton(app.UIFigure, 'push', ...
+                'Text', char(9664), ... % Unicode left arrow ◀
+                'Position', [500 380 30 30], ...
+                'ButtonPushedFcn', @(btn, event) onLeftArrowPressed(app), ...
+                'Tooltip', 'Previous image');
+
             app.ImageDropDown2 = uidropdown(app.UIFigure, ...
                 'Items', {}, ...
-                'Position', [500 380 250 30]);
+                'Position', [540 380 170 30]); % Adjusted width to align with Image 2 box
+
+            app.RightArrowButton2 = uibutton(app.UIFigure, 'push', ...
+                'Text', char(9654), ... % Unicode right arrow ▶
+                'Position', [720 380 30 30], ... % Aligned with right edge of Image 2 box
+                'ButtonPushedFcn', @(btn, event) onRightArrowPressed(app), ...
+                'Tooltip', 'Next image');
 
             app.ImageDropDown1.ValueChangedFcn = @(dd, event) onReferenceImageChanged(app, event);
             app.ImageDropDown2.ValueChangedFcn = @(dd, event) onComparisonImageChanged(app, event);
