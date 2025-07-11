@@ -1,0 +1,672 @@
+classdef SatelliteChangeAppTwo < matlab.apps.AppBase
+
+    properties (Access = public)
+
+        RegisteredImages cell
+        FlickerRegisteredImage
+
+        UIFigure matlab.ui.Figure
+        LoadFolderButton matlab.ui.control.Button
+        ChangeTypeGroup matlab.ui.container.ButtonGroup
+        AllButton matlab.ui.control.RadioButton
+        CityButton matlab.ui.control.RadioButton
+        WaterButton matlab.ui.control.RadioButton
+        ForestButton matlab.ui.control.RadioButton
+        IceButton matlab.ui.control.RadioButton
+        DesertButton matlab.ui.control.RadioButton
+        FeldButton matlab.ui.control.RadioButton
+        GlacierButton matlab.ui.control.RadioButton
+        FrauenkircheButton matlab.ui.control.RadioButton
+        OktoberfestButton matlab.ui.control.RadioButton
+
+        VisualizationDropDown matlab.ui.control.DropDown
+        ReplayModeDropdown matlab.ui.control.DropDown
+
+        InfoTextArea matlab.ui.control.TextArea
+        infoPanel matlab.ui.container.Panel
+        CurrentVisMode string = 'Overlay' % Default visualization mode
+        PlaybackTimer timer
+        IsPlaying logical = false
+
+        FlickerState logical = false
+        TimelapseFrames cell
+        TimelapseFrameIndex double = 1
+        HeatmapAlphaSlider matlab.ui.control.Slider
+        HeatmapAlphaLabel matlab.ui.control.Label
+        HeatmapColorMapDropDown matlab.ui.control.DropDown
+        HeatmapColorMapLabel matlab.ui.control.Label
+        GaussianSigmaSlider matlab.ui.control.Slider
+        GaussianSigmaLabel matlab.ui.control.Label
+        
+        ComputedOverlays struct % Stores overlays for all visualization methods
+
+
+        ImageDropDown1 matlab.ui.control.DropDown
+        ImageDropDown2 matlab.ui.control.DropDown
+        ImageAxes1 matlab.ui.control.UIAxes
+        ImageAxes2 matlab.ui.control.UIAxes
+        ResultAxes matlab.ui.control.UIAxes
+        PlaybackPanel matlab.ui.container.Panel
+        PlayButton matlab.ui.control.Button
+        PauseButton matlab.ui.control.Button
+        SpeedSlider matlab.ui.control.Slider
+        VisualizeButton matlab.ui.control.Button
+        AdvancedPanel matlab.ui.container.Panel
+        AdvancedCheck matlab.ui.control.CheckBox
+        AdvancedToggle matlab.ui.control.Button
+        ShowMasksButton matlab.ui.control.Button
+
+        ImageFolder string
+        ImageFiles struct
+        Images cell
+
+    end
+
+    methods (Access = private)
+
+        function selectedMask = getSelectedMask(app)
+            % Get the currently selected mask category from the radio button group
+            selectedButton = app.ChangeTypeGroup.SelectedObject;
+
+            if isempty(selectedButton)
+                selectedMask = 'all'; % Default fallback
+                return;
+            end
+
+            % Map button to mask category
+            switch selectedButton
+                case app.AllButton
+                    selectedMask = 'all';
+                case app.CityButton
+                    selectedMask = 'city';
+                case app.WaterButton
+                    selectedMask = 'water';
+                case app.ForestButton
+                    selectedMask = 'forest';
+                case app.IceButton
+                    selectedMask = 'ice';
+                case app.DesertButton
+                    selectedMask = 'desert';
+                case app.FeldButton
+                    selectedMask = 'feld';
+                case app.GlacierButton
+                    selectedMask = 'glacier';
+                case app.FrauenkircheButton
+                    selectedMask = 'frauenkirche';
+                case app.OktoberfestButton
+                    selectedMask = 'oktoberfest';
+                otherwise
+                    selectedMask = 'all';
+            end
+
+        end
+
+        function LoadFolderButtonPushed(app, ~)
+            folder = uigetdir;
+            if folder == 0, return; end
+
+            % Find all valid image files
+            exts = {'*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff'};
+            imageFilesCell = cell(1, numel(exts));
+
+            for i = 1:numel(exts)
+                imageFilesCell{i} = dir(fullfile(folder, exts{i}));
+            end
+            imageFiles = vertcat(imageFilesCell{:});
+            
+            if isempty(imageFiles)
+                uialert(app.UIFigure, 'No supported images found.', 'Error');
+                return;
+            end
+
+            % Store image file info
+            app.ImageFiles = imageFiles;
+
+            % Populate dropdowns with file names
+            names = {imageFiles.name};
+            app.ImageDropDown1.Items = names;
+            app.ImageDropDown2.Items = names;
+
+            % Set default selections
+            app.ImageDropDown1.Value = names{1};
+            app.ImageDropDown2.Value = names{min(2, numel(names))};
+
+            % Register images incrementally
+            app.RegisteredImages = cell(1, numel(imageFiles)); % Preallocate
+            ref_img = app.getImageByIndex(1); % First image is the reference
+            app.RegisteredImages{1} = ref_img; % Store the first image as-is
+
+            h = uiprogressdlg(app.UIFigure, ...
+                'Title', 'Registering Images', ...
+                'Message', 'Please wait...', ...
+                'Indeterminate', 'off', ...
+                'Cancelable', 'off');
+
+            for k = 2:numel(imageFiles)
+                moving_img = app.getImageByIndex(k);
+
+                try
+                    reg = registration.registerImagesSURF(moving_img, app.RegisteredImages{k-1}); % Register onto the previous image
+                    app.RegisteredImages{k} = reg.registered;
+                catch
+                    app.RegisteredImages{k} = moving_img; % Fallback to raw image
+                end
+
+                h.Value = k / numel(imageFiles);
+                h.Message = sprintf('Registering image %d of %d...', k, numel(imageFiles));
+                drawnow;
+            end
+
+            close(h);
+
+            % Update previews
+            updateImagePreview(app, 1);
+            updateImagePreview(app, 2);
+
+            % Link all axes for synchronized zoom and pan after images are loaded
+            linkaxes([app.ImageAxes1, app.ImageAxes2, app.ResultAxes], 'xy');
+
+            % Reset axis limits to ensure proper initial view
+            axis(app.ImageAxes1, 'image');
+            axis(app.ImageAxes2, 'image');
+            axis(app.ResultAxes, 'image');
+
+            % Turn off axis visibility
+            axis(app.ImageAxes1, 'off');
+            axis(app.ImageAxes2, 'off');
+            axis(app.ResultAxes, 'off');
+
+            % Update info
+            app.InfoTextArea.Value = sprintf('Loaded and registered %d images incrementally.', numel(names));
+
+            % Force window to front and maximized
+            app.UIFigure.WindowState = 'maximized';
+            drawnow;
+        end
+
+        function img = getImageByIndex(app, idx)
+            filepath = fullfile(app.ImageFiles(idx).folder, app.ImageFiles(idx).name);
+            img = imread(filepath);
+        end
+
+        function [img1, img2reg] = getRegisteredImagePair(app)
+            idx1 = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
+            idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            if isempty(idx1) || isempty(idx2)
+                img1 = [];
+                img2reg = [];
+                return;
+            end
+
+            img1 = app.RegisteredImages{idx1};
+            img2reg = app.RegisteredImages{idx2};
+        end
+
+        function onVisualizationModeChanged(app, ~)
+            % Optionally, stop any running playback
+            onPauseButtonPressed(app);
+        end
+        function computeOverlays(app)
+            % Prepare registered images
+            [img1, ~] = getRegisteredImagePair(app);
+            if isempty(img1), return; end
+
+            % Get selected mask category
+            selectedMask = getSelectedMask(app);
+
+            % Initialize storage for overlays
+            app.ComputedOverlays = struct('Overlay', {}, 'AbsoluteDifference', {}, 'Heatmap', {}, 'RedOverlay', {});
+
+            % Compute overlays for all visualization methods
+            for i = 1:numel(app.RegisteredImages)
+                img2 = app.RegisteredImages{i};
+
+                % Overlay
+                app.ComputedOverlays(i).Overlay = 0.5 * im2double(img1) + 0.5 * im2double(img2);
+
+                % Absolute Difference
+                app.ComputedOverlays(i).AbsoluteDifference = abs(im2double(img1) - im2double(img2)); 
+
+                % Heatmap
+                params = struct();
+                params.alpha = app.HeatmapAlphaSlider.Value;
+                params.gaussian_sigma = app.GaussianSigmaSlider.Value;
+                params.colormap_name = app.HeatmapColorMapDropDown.Value;
+                [heatmapOverlay, ~] = visualization.get_heatmap_overlay(img1, img2, selectedMask, params);
+                app.ComputedOverlays(i).Heatmap = heatmapOverlay;
+
+                % Red Overlay
+                params.alpha = app.HeatmapAlphaSlider.Value;
+                params.gaussian_sigma = app.GaussianSigmaSlider.Value;
+                [redOverlay, ~] = visualization.get_red_overlay(img1, img2, selectedMask, params);
+                app.ComputedOverlays(i).RedOverlay = redOverlay;
+            end
+        end
+        function onVisualizeButtonPressed(app, ~)
+            % Compute overlays if not already computed
+            if isempty(app.ComputedOverlays)
+                computeOverlays(app);
+            end
+
+            % Get selected visualization method
+            mode = app.VisualizationDropDown.Value;
+
+            % Display the overlay for the selected second image
+            idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+            if ~isempty(idx2)
+                imshow(app.ComputedOverlays(idx2).(mode), 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                title(app.ResultAxes, sprintf('%s Overlay (%s): %s → %s', ...
+                    mode, selectedMask, ...
+                    strrep(app.ImageDropDown2.Value, '_', ' '), ...
+                    strrep(app.ImageDropDown1.Value, '_', ' ')));
+            end
+        end
+
+        function updateImagePreview(app, index)
+
+            if index == 1
+                ax = app.ImageAxes1;
+                dropdown = app.ImageDropDown1;
+                axTitle = 'Image 1';
+            else
+                ax = app.ImageAxes2;
+                dropdown = app.ImageDropDown2;
+                axTitle = 'Image 2';
+            end
+
+            if isempty(app.RegisteredImages) || isempty(dropdown.Items)
+                blank = ones(100, 100, 3);
+                imshow(blank, 'Parent', ax);
+                axis(ax, 'off');
+                title(ax, axTitle);
+                return;
+            end
+
+            name = dropdown.Value;
+            idx = find(strcmp({app.ImageFiles.name}, name), 1);
+
+            if isempty(idx)
+                blank = ones(100, 100, 3);
+                imshow(blank, 'Parent', ax);
+                axis(ax, 'off');
+                title(ax, [axTitle, ' (Not found)']);
+                return;
+            end
+
+            % Display registered image
+            img = app.RegisteredImages{idx};
+            imshow(img, 'Parent', ax);
+            axis(ax, 'image');
+            axis(ax, 'off');
+            title(ax, axTitle);
+        end
+
+        function onPlayButtonPressed(app)
+            % Stop if already playing
+            if app.IsPlaying
+                onPauseButtonPressed(app);
+            end
+
+            app.IsPlaying = true;
+            app.CurrentVisMode = app.VisualizationDropDown.Value;
+
+            % Prepare/reset flicker state
+            app.FlickerState = false;
+
+            % Reset timelapse state
+            if strcmp(app.CurrentVisMode, 'Timelapse')
+
+                if isempty(app.TimelapseFrames)
+                    % Initialize timelapse frames if not already done
+                    idx1 = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
+                    idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+                    if isempty(idx1) || isempty(idx2), return; end
+
+                    low = min(idx1, idx2);
+                    high = max(idx1, idx2);
+
+                    app.TimelapseFrames = app.RegisteredImages(low:high);
+                    app.TimelapseFrameIndex = 1;
+                end
+
+            end
+
+            % Use SpeedSlider value for timer period (lower = faster)
+            minPeriod = 0.1;
+            maxPeriod = 2;
+            sliderVal = app.SpeedSlider.Value;
+            period = minPeriod + (maxPeriod - minPeriod) * (1 - (sliderVal - minPeriod) / (maxPeriod - minPeriod));
+            period = max(minPeriod, min(maxPeriod, period));
+
+            % Create a new timer
+            app.PlaybackTimer = timer( ...
+                'ExecutionMode', 'fixedSpacing', ...
+                'Period', period, ...
+                'TimerFcn', @(~, ~) runPlaybackStep(app));
+
+            start(app.PlaybackTimer);
+        end
+
+        function onPauseButtonPressed(app)
+            app.IsPlaying = false;
+
+            if ~isempty(app.PlaybackTimer) && isvalid(app.PlaybackTimer)
+                stop(app.PlaybackTimer);
+                delete(app.PlaybackTimer);
+            end
+
+        end
+
+        function runPlaybackStep(app)
+            if isempty(app.ComputedOverlays)
+                uialert(app.UIFigure, 'No overlays available for replay.', 'Error');
+                return;
+            end
+
+            mode = app.VisualizationDropDown.Value;
+            idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            switch app.ReplayModeDropdown.Value
+                case 'Flicker'
+                    % Flicker between the selected second image and its overlay
+                    if isempty(idx2), return; end
+                    if app.FlickerState
+                        imshow(app.ComputedOverlays(idx2).(mode), 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    else
+                        imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    end
+                    app.FlickerState = ~app.FlickerState;
+
+                case 'Timelapse'
+                    % Timelapse through all overlays for the chosen visualization method
+                    if isempty(app.TimelapseFrames)
+                        app.TimelapseFrames = {app.ComputedOverlays.(mode)}; % Extract overlays for the selected mode
+                        app.TimelapseFrameIndex = 1;
+                    end
+
+                    imshow(app.TimelapseFrames{app.TimelapseFrameIndex}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    app.TimelapseFrameIndex = mod(app.TimelapseFrameIndex, numel(app.TimelapseFrames)) + 1;
+            end
+        end
+
+        function onSpeedSliderChanged(app, ~)
+
+            if app.IsPlaying
+                onPauseButtonPressed(app); % Stop current timer
+                onPlayButtonPressed(app); % Restart with new speed
+            end
+
+        end
+
+        function toggleAdvancedPanel(app)
+
+            if strcmp(app.AdvancedPanel.Visible, 'off')
+                app.AdvancedPanel.Visible = 'on';
+                app.AdvancedToggle.Text = 'Hide Advanced Settings ▲';
+            else
+                app.AdvancedPanel.Visible = 'off';
+                app.AdvancedToggle.Text = 'Show Advanced Settings ▼';
+            end
+
+        end
+
+    end
+
+    methods (Access = private)
+
+        function createComponents(app)
+            % Main window
+            app.UIFigure = uifigure('Position', [100 100 1000 600]);
+            app.UIFigure.Name = 'Satellite Change Visualizer';
+            app.UIFigure.WindowState = 'maximized';
+
+            % Load Folder Button
+            app.LoadFolderButton = uibutton(app.UIFigure, 'push', ...
+                'Text', 'Load Image Folder', ...
+                'Position', [20 540 180 30], ...
+                'ButtonPushedFcn', @(btn, event) LoadFolderButtonPushed(app));
+
+            % Change Type Radio Group - Updated to include all mask categories
+            app.ChangeTypeGroup = uibuttongroup(app.UIFigure, ...
+                'Title', 'Mask Category', ...
+                'Position', [20 330 180 200]); % Adjusted position to push down
+
+            % Create radio buttons for all valid categories
+            app.AllButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'All', ...
+                'Position', [10 160 80 20], ...
+                'Value', true); % Default selection
+
+            app.CityButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'City', ...
+                'Position', [90 160 80 20]);
+
+            app.WaterButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Water', ...
+                'Position', [10 140 80 20]);
+
+            app.ForestButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Forest', ...
+                'Position', [90 140 80 20]);
+
+            app.IceButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Ice', ...
+                'Position', [10 120 80 20]);
+
+            app.DesertButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Desert', ...
+                'Position', [90 120 80 20]);
+
+            app.FeldButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Feld', ...
+                'Position', [10 100 80 20]);
+
+            app.GlacierButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Glacier', ...
+                'Position', [90 100 80 20]);
+
+            app.FrauenkircheButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Frauenkirche', ...
+                'Position', [10 80 80 20]);
+
+            app.OktoberfestButton = uiradiobutton(app.ChangeTypeGroup, ...
+                'Text', 'Oktoberfest', ...
+                'Position', [90 80 80 20]);
+            % Visualization Type Dropdown
+            app.VisualizationDropDown = uidropdown(app.UIFigure, ...
+                'Items', { 'Overlay', 'Absolute Difference', 'Heatmap', 'Red Overlay'}, ...
+                'Value', 'Overlay', ...
+                'Position', [20 310 180 30]);
+
+            % Toggle button to show/hide advanced settings
+            app.AdvancedToggle = uibutton(app.UIFigure, 'push', ...
+                'Text', 'Show Advanced Settings ▼', ...
+                'Position', [20 270 180 30], ...
+                'ButtonPushedFcn', @(btn, event) toggleAdvancedPanel(app));
+
+            % --- Advanced Settings Collapsible Section ---
+            app.AdvancedPanel = uipanel(app.UIFigure, ...
+                'Position', [20 100 180 170], ... % moved down below toggle button
+                'FontWeight', 'bold', ...
+                'BackgroundColor', [0.97 0.97 0.97], ...
+                'Visible', 'off'); % Start collapsed
+
+            % Heatmap Alpha Label
+            app.HeatmapAlphaLabel = uilabel(app.AdvancedPanel, ...
+                'Text', 'Heatmap Alpha:', ...
+                'Position', [10 110 160 20]);
+
+            % Heatmap Alpha Slider
+            app.HeatmapAlphaSlider = uislider(app.AdvancedPanel, ...
+                'Position', [10 100 160 3], ...
+                'Limits', [0 1], ...
+                'Value', 0.6, ...
+                'MajorTicks', [0 0.25 0.5 0.75 1], ...
+                'Tooltip', 'Alpha transparency');
+
+            % Gaussian Sigma Label
+            app.GaussianSigmaLabel = uilabel(app.AdvancedPanel, ...
+                'Text', 'Gaussian Sigma:', ...
+                'Position', [10 70 160 20]);
+
+            % Gaussian Sigma Slider
+            app.GaussianSigmaSlider = uislider(app.AdvancedPanel, ...
+                'Position', [10 60 160 3], ...
+                'Limits', [0.1 5], ...
+                'Value', 1.0, ...
+                'MajorTicks', [0.1 1 2 3 4 5], ...
+                'Tooltip', 'Gaussian smoothing sigma');
+
+            % Heatmap Colormap Dropdown Label
+            app.HeatmapColorMapLabel = uilabel(app.AdvancedPanel, ...
+                'Text', 'Colormap:', ...
+                'Position', [10 30 160 20]);
+
+            % Heatmap Colormap Dropdown
+            app.HeatmapColorMapDropDown = uidropdown(app.AdvancedPanel, ...
+                'Items', {'jet', 'hot', 'parula', 'turbo'}, ...
+                'Value', 'jet', ...
+                'Position', [10 10 160 22], ...
+                'Tooltip', 'Heatmap colormap');
+
+            % Info Text Area (in a panel for border)
+            app.infoPanel = uipanel(app.UIFigure, ...
+                'Position', [20 140 180 60], ... % Always between advanced panel and visualize button
+                'BorderType', 'line', ...
+                'Title', '');
+
+            app.InfoTextArea = uitextarea(app.infoPanel, ...
+                'Position', [1 1 178 58], ...
+                'Editable', 'off', ...
+                'Value', {'Information will appear here...'});
+
+            % Image Preview Axes (in panels for border)
+            panel1 = uipanel(app.UIFigure, ...
+                'Position', [220 420 250 160], ...
+                'BorderType', 'line', ...
+                'Title', '');
+            app.ImageAxes1 = uiaxes(panel1, ...
+                'Position', [1 1 248 158], ...
+                'Box', 'on');
+            title(app.ImageAxes1, 'Image 1');
+            axis(app.ImageAxes1, 'off');
+
+            panel2 = uipanel(app.UIFigure, ...
+                'Position', [500 420 250 160], ...
+                'BorderType', 'line', ...
+                'Title', '');
+            app.ImageAxes2 = uiaxes(panel2, ...
+                'Position', [1 1 248 158], ...
+                'Box', 'on');
+            title(app.ImageAxes2, 'Image 2');
+            axis(app.ImageAxes2, 'off');
+
+            % Dropdowns placed directly beneath each preview image
+            app.ImageDropDown1 = uidropdown(app.UIFigure, ...
+                'Items', {}, ...
+                'Position', [220 380 250 30]); % Y = 380 aligns closely below
+
+            app.ImageDropDown2 = uidropdown(app.UIFigure, ...
+                'Items', {}, ...
+                'Position', [500 380 250 30]);
+
+            app.ImageDropDown1.ValueChangedFcn = @(dd, event) updateImagePreview(app, 1);
+            app.ImageDropDown2.ValueChangedFcn = @(dd, event) updateImagePreview(app, 2);
+
+            % Main Visualization Output (in a panel for border)
+            resultPanel = uipanel(app.UIFigure, ...
+                'Position', [220 90 550 280], ...
+                'BorderType', 'line', ...
+                'Title', '');
+            app.ResultAxes = uiaxes(resultPanel, ...
+                'Position', [1 1 548 278], ...
+                'Box', 'on');
+            title(app.ResultAxes, 'Visualization Output');
+            axis(app.ResultAxes, 'off');
+
+            % Add a button to display masks in the bottom right corner of the visualization output area
+            app.ShowMasksButton = uibutton(resultPanel, 'push', ...
+                'Text', 'Show Masks', ...
+                'Position', [resultPanel.Position(3) - 110, 10, 100, 30], ... % Adjusted absolute position
+                'ButtonPushedFcn', @(btn, event) onShowMasksButtonPressed(app));
+
+            % Play/Pause Controls (hidden by default)
+            app.PlayButton = uibutton(app.UIFigure, 'push', ...
+                'Text', char(9654), ... % Unicode play icon ►
+                'Position', [400 50 50 30], ...
+                'ButtonPushedFcn', @(btn, event) onPlayButtonPressed(app), ...
+                'Visible', 'on');
+
+            app.PauseButton = uibutton(app.UIFigure, 'push', ...
+                'Text', char(10073), ... % Unicode pause icon ❚❚
+                'Position', [460 50 50 30], ...
+                'ButtonPushedFcn', @(btn, event) onPauseButtonPressed(app), ...
+                'Visible', 'on');
+
+            % Add Replay Mode Dropdown to the left of the Play button
+            app.ReplayModeDropdown = uidropdown(app.UIFigure, ...
+                'Items', {'Flicker', 'Timelapse'}, ...
+                'Value', 'Flicker', ...
+                'Position', [340 50 50 30]);
+
+            % Speed slider (hidden by default)
+            app.SpeedSlider = uislider(app.UIFigure, ...
+                'Position', [520 65 120 3], ...
+                'Limits', [0.1 2], ...
+                'Value', 0.5, ...
+                'MajorTicks', [0.1 0.5 1 1.5 2], ...
+                'Visible', 'on', ...
+                'ValueChangedFcn', @(s, e) onSpeedSliderChanged(app)); % <-- Add this
+
+            % Visualize Button (right column, always visible)
+            app.VisualizeButton = uibutton(app.UIFigure, 'push', ...
+                'Text', 'Visualize', ...
+                'Position', [20 100 180 40], ... % X=20, width=180, Y=100 puts it below InfoTextArea
+                'ButtonPushedFcn', @(btn, event) onVisualizeButtonPressed(app), ...
+                'FontWeight', 'bold', ...
+                'FontSize', 16, ...
+                'BackgroundColor', [0.2 0.6 1]); % Light blue, change as desired
+
+            % Set dropdown callback to control visibility
+            app.VisualizationDropDown.ValueChangedFcn = @(dd, event) onVisualizationModeChanged(app);
+            uistack(app.AdvancedPanel, 'top');
+
+            % Move the ShowMasksButton to be positioned under the Visualize button
+            app.ShowMasksButton.Parent = app.UIFigure;
+            app.ShowMasksButton.Position = [20, 60, 180, 30];
+        end
+
+    end
+
+    methods (Access = public)
+
+        function app = SatelliteChangeAppTwo
+            createComponents(app);
+        end
+
+    end
+
+end
+
+% Define the callback function for the Show Masks button
+function onShowMasksButtonPressed(app)
+    % Get the selected mask category
+    selectedMask = getSelectedMask(app);
+
+    % Get the registered image pair
+    [img1, img2reg] = getRegisteredImagePair(app);
+    if isempty(img1) || isempty(img2reg)
+        uialert(app.UIFigure, 'No images available for visualization.', 'Error');
+        return;
+    end
+
+    % Generate binary mask and RGB-masked image using category_masks.m
+    [mask, rgbMaskedImage] = masks.category_masks(img1, selectedMask);
+
+    % Plot original, binary mask, and RGB-masked image
+    figure('Name', ['Category: ', selectedMask]);
+    subplot(1, 3, 1); imshow(img1); title('Original Image', 'FontWeight', 'bold');
+    subplot(1, 3, 2); imshow(mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
+    subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
+end
