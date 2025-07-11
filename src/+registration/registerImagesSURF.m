@@ -15,7 +15,7 @@ defaults = struct( ...
     'NumScaleLevels',  6, ...
     'MatchThreshold',  50, ...
     'MaxRatio',        0.6, ...
-    'TransformType',   'projective', ...
+    'TransformType',   'rigid', ...
     'MinInliers',      6, ...
     'MaxNumTrials',    15000, ...      % RANSAC: maximum iterations
     'Confidence',      99,   ...      % RANSAC: desired confidence (percent)
@@ -95,7 +95,7 @@ if nnz(inlierIdx) < params.MinInliers
     end
 
     % Compose the small pairwise transforms
-    Ttot = projective2d(eye(3));
+    Ttot = affine2d(eye(3)); % Use affine2d for rigid transformations
     for kk = params.StartIdx : (params.EndIdx-1)
         A = params.ImageSequence{kk};
         B = params.ImageSequence{kk+1};
@@ -115,7 +115,7 @@ if nnz(inlierIdx) < params.MinInliers
             continue
         end
 
-        Ttot = projective2d(tmpReg.tform.T * Ttot.T);
+        Ttot = affine2d(tmpReg.tform.T * Ttot.T); % Use affine2d for rigid transformations
     end
 
     finalTform = Ttot;

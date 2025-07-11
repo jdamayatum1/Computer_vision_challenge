@@ -55,8 +55,8 @@ function [mask, rgbMaskedImage] = category_masks(image, category)
     end
 
     % Plot original, binary mask, and RGB-masked image
-    figure('Name', ['Category: ', category]);
-    subplot(1, 3, 1); imshow(image); title('Original Image', 'FontWeight', 'bold');
-    subplot(1, 3, 2); imshow(mask); title(['Binary Mask: ', category], 'FontWeight', 'bold');
-    subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
+    % figure('Name', ['Category: ', category]);
+    % subplot(1, 3, 1); imshow(image); title('Original Image', 'FontWeight', 'bold');
+    % subplot(1, 3, 2); imshow(mask); title(['Binary Mask: ', category], 'FontWeight', 'bold');
+    % subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
 end

@@ -50,6 +50,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
         AdvancedPanel matlab.ui.container.Panel
         AdvancedCheck matlab.ui.control.CheckBox
         AdvancedToggle matlab.ui.control.Button
+        ShowMasksButton matlab.ui.control.Button
 
         ImageFolder string
         ImageFiles struct
@@ -102,12 +103,13 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
             % Find all valid image files
             exts = {'*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff'};
-            imageFiles = [];
+            imageFilesCell = cell(1, numel(exts));
 
             for i = 1:numel(exts)
-                imageFiles = [imageFiles; dir(fullfile(folder, exts{i}))];
+                imageFilesCell{i} = dir(fullfile(folder, exts{i}));
             end
-
+            imageFiles = vertcat(imageFilesCell{:});
+            
             if isempty(imageFiles)
                 uialert(app.UIFigure, 'No supported images found.', 'Error');
                 return;
@@ -125,9 +127,10 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             app.ImageDropDown1.Value = names{1};
             app.ImageDropDown2.Value = names{min(2, numel(names))};
 
-            % Register all images to the first image as reference
-            ref_img = app.getImageByIndex(1);
-            app.RegisteredImages = cell(1, numel(imageFiles)); % preallocate
+            % Register images incrementally
+            app.RegisteredImages = cell(1, numel(imageFiles)); % Preallocate
+            ref_img = app.getImageByIndex(1); % First image is the reference
+            app.RegisteredImages{1} = ref_img; % Store the first image as-is
 
             h = uiprogressdlg(app.UIFigure, ...
                 'Title', 'Registering Images', ...
@@ -135,14 +138,14 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 'Indeterminate', 'off', ...
                 'Cancelable', 'off');
 
-            for k = 1:numel(imageFiles)
+            for k = 2:numel(imageFiles)
                 moving_img = app.getImageByIndex(k);
 
                 try
-                    reg = registration.registerImagesSURF(moving_img, ref_img);
+                    reg = registration.registerImagesSURF(moving_img, app.RegisteredImages{k-1}); % Register onto the previous image
                     app.RegisteredImages{k} = reg.registered;
                 catch
-                    app.RegisteredImages{k} = moving_img; % fallback to raw
+                    app.RegisteredImages{k} = moving_img; % Fallback to raw image
                 end
 
                 h.Value = k / numel(imageFiles);
@@ -170,7 +173,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             axis(app.ResultAxes, 'off');
 
             % Update info
-            app.InfoTextArea.Value = sprintf('Loaded and registered %d images.', numel(names));
+            app.InfoTextArea.Value = sprintf('Loaded and registered %d images incrementally.', numel(names));
 
             % Force window to front and maximized
             app.UIFigure.WindowState = 'maximized';
@@ -271,6 +274,16 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                     % Create heatmap overlay using selected mask
                     [overlay_img, stats] = visualization.get_heatmap_overlay(img1, img2reg, selectedMask, params);
 
+                    statsMessage = sprintf(['Statistics calculated successfully.\n', ...
+                    'Total pixels: %d\n', ...
+                    'Reference mask coverage: %.2f%%\n', ...
+                    'Comparison mask coverage: %.2f%%\n', ...
+                    'Change mask coverage: %.2f%%\n'], ...
+                    stats.total_pixels, ...
+                    stats.mask_ref_coverage, ...
+                    stats.mask_img_coverage, ...
+                    stats.mask_diff_coverage);
+                    app.InfoTextArea.Value = statsMessage;
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                     title(app.ResultAxes, sprintf('Heatmap Overlay (%s): %s → %s', ...
@@ -293,7 +306,16 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
                     % Create red overlay using selected mask
                     [overlay_img, stats] = visualization.get_red_overlay(img1, img2reg, selectedMask, params);
-
+                    statsMessage = sprintf(['Statistics calculated successfully.\n', ...
+                    'Total pixels: %d\n', ...
+                    'Reference mask coverage: %.2f%%\n', ...
+                    'Comparison mask coverage: %.2f%%\n', ...
+                    'Change mask coverage: %.2f%%\n'], ...
+                    stats.total_pixels, ...
+                    stats.mask_ref_coverage, ...
+                    stats.mask_img_coverage, ...
+                    stats.mask_diff_coverage);
+                    app.InfoTextArea.Value = statsMessage;
                     % Display result
                     imshow(overlay_img, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                     title(app.ResultAxes, sprintf('Red Overlay (%s): %s → %s', ...
@@ -451,50 +473,49 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             % Change Type Radio Group - Updated to include all mask categories
             app.ChangeTypeGroup = uibuttongroup(app.UIFigure, ...
                 'Title', 'Mask Category', ...
-                'Position', [20 350 180 180]);
+                'Position', [20 330 180 200]); % Adjusted position to push down
 
             % Create radio buttons for all valid categories
             app.AllButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'All', ...
-                'Position', [10 150 80 20], ...
+                'Position', [10 160 80 20], ...
                 'Value', true); % Default selection
 
             app.CityButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'City', ...
-                'Position', [90 150 80 20]);
+                'Position', [90 160 80 20]);
 
             app.WaterButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Water', ...
-                'Position', [10 130 80 20]);
+                'Position', [10 140 80 20]);
 
             app.ForestButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Forest', ...
-                'Position', [90 130 80 20]);
+                'Position', [90 140 80 20]);
 
             app.IceButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Ice', ...
-                'Position', [10 110 80 20]);
+                'Position', [10 120 80 20]);
 
             app.DesertButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Desert', ...
-                'Position', [90 110 80 20]);
+                'Position', [90 120 80 20]);
 
             app.FeldButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Feld', ...
-                'Position', [10 90 80 20]);
+                'Position', [10 100 80 20]);
 
             app.GlacierButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Glacier', ...
-                'Position', [90 90 80 20]);
+                'Position', [90 100 80 20]);
 
             app.FrauenkircheButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Frauenkirche', ...
-                'Position', [10 70 80 20]);
+                'Position', [10 80 80 20]);
 
             app.OktoberfestButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Oktoberfest', ...
-                'Position', [90 70 80 20]);
-
+                'Position', [90 80 80 20]);
             % Visualization Type Dropdown
             app.VisualizationDropDown = uidropdown(app.UIFigure, ...
                 'Items', {'Flicker', 'Overlay', 'Absolute Difference', 'Timelapse', 'Heatmap', 'Red Overlay'}, ...
@@ -607,18 +628,24 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             title(app.ResultAxes, 'Visualization Output');
             axis(app.ResultAxes, 'off');
 
+            % Add a button to display masks in the bottom right corner of the visualization output area
+            app.ShowMasksButton = uibutton(resultPanel, 'push', ...
+                'Text', 'Show Masks', ...
+                'Position', [resultPanel.Position(3) - 110, 10, 100, 30], ... % Adjusted absolute position
+                'ButtonPushedFcn', @(btn, event) onShowMasksButtonPressed(app));
+
             % Play/Pause Controls (hidden by default)
             app.PlayButton = uibutton(app.UIFigure, 'push', ...
                 'Text', char(9654), ... % Unicode play icon ►
                 'Position', [400 50 50 30], ...
                 'ButtonPushedFcn', @(btn, event) onPlayButtonPressed(app), ...
-                'Visible', 'off');
+                'Visible', 'on');
 
             app.PauseButton = uibutton(app.UIFigure, 'push', ...
                 'Text', char(10073), ... % Unicode pause icon ❚❚
                 'Position', [460 50 50 30], ...
                 'ButtonPushedFcn', @(btn, event) onPauseButtonPressed(app), ...
-                'Visible', 'off');
+                'Visible', 'on');
 
             % Speed slider (hidden by default)
             app.SpeedSlider = uislider(app.UIFigure, ...
@@ -626,7 +653,7 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
                 'Limits', [0.1 2], ...
                 'Value', 0.5, ...
                 'MajorTicks', [0.1 0.5 1 1.5 2], ...
-                'Visible', 'off', ...
+                'Visible', 'on', ...
                 'ValueChangedFcn', @(s, e) onSpeedSliderChanged(app)); % <-- Add this
 
             % Visualize Button (right column, always visible)
@@ -641,6 +668,10 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
             % Set dropdown callback to control visibility
             app.VisualizationDropDown.ValueChangedFcn = @(dd, event) onVisualizationModeChanged(app);
             uistack(app.AdvancedPanel, 'top');
+
+            % Move the ShowMasksButton to be positioned under the Visualize button
+            app.ShowMasksButton.Parent = app.UIFigure;
+            app.ShowMasksButton.Position = [20, 60, 180, 30];
         end
 
     end
@@ -653,4 +684,26 @@ classdef SatelliteChangeAppOne < matlab.apps.AppBase
 
     end
 
+end
+
+% Define the callback function for the Show Masks button
+function onShowMasksButtonPressed(app)
+    % Get the selected mask category
+    selectedMask = getSelectedMask(app);
+
+    % Get the registered image pair
+    [img1, img2reg] = getRegisteredImagePair(app);
+    if isempty(img1) || isempty(img2reg)
+        uialert(app.UIFigure, 'No images available for visualization.', 'Error');
+        return;
+    end
+
+    % Generate binary mask and RGB-masked image using category_masks.m
+    [mask, rgbMaskedImage] = masks.category_masks(img1, selectedMask);
+
+    % Plot original, binary mask, and RGB-masked image
+    figure('Name', ['Category: ', selectedMask]);
+    subplot(1, 3, 1); imshow(img1); title('Original Image', 'FontWeight', 'bold');
+    subplot(1, 3, 2); imshow(mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
+    subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
 end
