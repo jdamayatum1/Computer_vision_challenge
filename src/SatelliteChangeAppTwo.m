@@ -1024,7 +1024,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             app.SpeedSlider = uislider(app.UIFigure, ...
                 'Position', [520 65 120 3], ...
                 'Limits', [0.1 2], ...
-                'Value', 0.5, ...
+                'Value', 1.5, ...
                 'MajorTicks', [0.1 0.5 1 1.5 2], ...
                 'Visible', 'on', ...
                 'ValueChangedFcn', @(s, e) onSpeedSliderChanged(app)); % <-- Add this
@@ -1126,9 +1126,25 @@ function onShowMasksButtonPressed(app)
 
     end
 
-    % Plot original, binary mask, and RGB-masked image
-    figure('Name', ['Category: ', selectedMask, ' - Image: ', app.ImageDropDown2.Value]);
-    subplot(1, 3, 1); imshow(img1); title('Reference Image', 'FontWeight', 'bold');
-    subplot(1, 3, 2); imshow(img_united_mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
-    subplot(1, 3, 3); imshow(rgbMaskedImage); title('RGB Masked Output', 'FontWeight', 'bold');
+    % Generate RGB masked version of the comparison image
+    rgbMaskedImage2 = img2reg;
+
+    for c = 1:size(img2reg, 3)
+        rgbMaskedImage2(:, :, c) = img2reg(:, :, c) .* uint8(img_united_mask);
+    end
+
+    % Plot in 2x2 grid layout
+    figure('Name', ['Category: ', selectedMask, ' - Images: ', app.ImageDropDown1.Value, ' → ', app.ImageDropDown2.Value]);
+
+    % Field 1: Reference image (top left)
+    subplot(2, 2, 1); imshow(img1); title('Reference Image', 'FontWeight', 'bold');
+
+    % Field 2: Binary mask (top right)
+    subplot(2, 2, 2); imshow(img_united_mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
+
+    % Field 3: RGB reference image masked (bottom left)
+    subplot(2, 2, 3); imshow(rgbMaskedImage); title('RGB Reference Image Masked', 'FontWeight', 'bold');
+
+    % Field 4: RGB image masked (bottom right)
+    subplot(2, 2, 4); imshow(rgbMaskedImage2); title('RGB Image Masked', 'FontWeight', 'bold');
 end
