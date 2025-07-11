@@ -504,6 +504,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         strrep(app.ImageDropDown1.Value, '_', ' '), ...
                         strrep(app.ImageDropDown2.Value, '_', ' ')));
                     fprintf('Successfully displayed %s overlay for image %d\n', mode, idx2);
+
+                    % Display stats if available
+                    displayStatsInGUI(app, mode, idx2);
                 else
                     uialert(app.UIFigure, sprintf('%s overlay not available. Please recompute overlays.', mode), 'Error');
                     fprintf('ERROR: %s overlay not found for image %d\n', mode, idx2);
@@ -635,6 +638,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                             overlayImage = app.ComputedOverlays(idx2).(fieldName);
                             imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                             title(app.ResultAxes, sprintf('%s Overlay', mode));
+
+                            % Display stats if available
+                            displayStatsInGUI(app, mode, idx2);
                         else
                             % Fall back to original image if overlay not available
                             imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
@@ -660,6 +666,10 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         imshow(currentFrame, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
                         title(app.ResultAxes, sprintf('%s Timelapse - Frame %d/%d', ...
                             mode, app.TimelapseFrameIndex, numel(app.TimelapseFrames)));
+
+                        % Display stats if available (use the current frame index for stats)
+                        displayStatsInGUI(app, mode, app.TimelapseFrameIndex);
+
                         app.TimelapseFrameIndex = mod(app.TimelapseFrameIndex, numel(app.TimelapseFrames)) + 1;
                     end
 
@@ -678,6 +688,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                             strrep(app.ImageDropDown1.Value, '_', ' '), ...
                             strrep(app.ImageDropDown2.Value, '_', ' ')));
                         fprintf('Static mode: Displaying preprocessed %s overlay for image %d\n', mode, idx2);
+
+                        % Display stats if available
+                        displayStatsInGUI(app, mode, idx2);
                     else
                         uialert(app.UIFigure, sprintf('%s overlay not available. Please compute overlays first.', mode), 'Error');
                         fprintf('ERROR: Static mode - %s overlay not found for image %d\n', mode, idx2);
@@ -792,8 +805,47 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         strrep(app.ImageDropDown1.Value, '_', ' '), ...
                         strrep(app.ImageDropDown2.Value, '_', ' ')));
                     fprintf('Auto-displayed %s overlay for image %d\n', mode, idx2);
+
+                    % Display stats if available
+                    displayStatsInGUI(app, mode, idx2);
                 end
 
+            end
+
+        end
+
+        function displayStatsInGUI(app, mode, imageIndex)
+            % Display statistics in the InfoTextArea for heatmap and red overlay modes
+
+            % Only display stats for heatmap and red overlay modes
+            if ~ismember(mode, {'Heatmap', 'Red Overlay'})
+                return;
+            end
+
+            % Determine stats field name based on mode
+            if strcmp(mode, 'Heatmap')
+                statsFieldName = 'HeatmapStats';
+            else % Red Overlay
+                statsFieldName = 'RedOverlayStats';
+            end
+
+            % Check if stats are available
+            if imageIndex <= numel(app.ComputedOverlays) && ...
+                    isfield(app.ComputedOverlays(1), statsFieldName) && ...
+                    ~isempty(app.ComputedOverlays(imageIndex).(statsFieldName)) && ...
+                    isfield(app.ComputedOverlays(imageIndex).(statsFieldName), 'stats_text_cell')
+
+                % Get the formatted stats text
+                stats = app.ComputedOverlays(imageIndex).(statsFieldName);
+                statsText = stats.stats_text_cell;
+
+                % Display in InfoTextArea
+                app.InfoTextArea.Value = statsText;
+                fprintf('Displayed %s stats for image %d\n', mode, imageIndex);
+            else
+                % No stats available
+                app.InfoTextArea.Value = {'No statistics available for this visualization mode.'};
+                fprintf('No %s stats available for image %d\n', mode, imageIndex);
             end
 
         end
@@ -1126,25 +1178,50 @@ function onShowMasksButtonPressed(app)
 
     end
 
-    % Generate RGB masked version of the comparison image
+    % Generate individual masks for both images
+    [img1_mask, rgbMaskedImage1] = masks.category_masks(img1, selectedMask);
+    [img2_mask, rgbMaskedImage2] = masks.category_masks(img2reg, selectedMask);
+
+    % Generate RGB masked versions using individual masks
+    rgbMaskedImage1 = img1;
+
+    for c = 1:size(img1, 3)
+        rgbMaskedImage1(:, :, c) = img1(:, :, c) .* uint8(img1_mask);
+    end
+
     rgbMaskedImage2 = img2reg;
 
     for c = 1:size(img2reg, 3)
-        rgbMaskedImage2(:, :, c) = img2reg(:, :, c) .* uint8(img_united_mask);
+        rgbMaskedImage2(:, :, c) = img2reg(:, :, c) .* uint8(img2_mask);
     end
 
-    % Plot in 2x2 grid layout
+    % Plot in 3x3 grid layout
     figure('Name', ['Category: ', selectedMask, ' - Images: ', app.ImageDropDown1.Value, ' → ', app.ImageDropDown2.Value]);
 
-    % Field 1: Reference image (top left)
-    subplot(2, 2, 1); imshow(img1); title('Reference Image', 'FontWeight', 'bold');
+    % Position 1: Reference image (top left)
+    subplot(3, 3, 1); imshow(img1); title('Reference Image', 'FontWeight', 'bold');
 
-    % Field 2: Binary mask (top right)
-    subplot(2, 2, 2); imshow(img_united_mask); title(['Binary Mask: ', selectedMask], 'FontWeight', 'bold');
+    % Position 2: Comparison image (top middle)
+    subplot(3, 3, 2); imshow(img2reg); title('Comparison Image', 'FontWeight', 'bold');
 
-    % Field 3: RGB reference image masked (bottom left)
-    subplot(2, 2, 3); imshow(rgbMaskedImage); title('RGB Reference Image Masked', 'FontWeight', 'bold');
+    % Position 3: Empty (top right)
+    subplot(3, 3, 3); axis off; title('', 'FontWeight', 'bold');
 
-    % Field 4: RGB image masked (bottom right)
-    subplot(2, 2, 4); imshow(rgbMaskedImage2); title('RGB Image Masked', 'FontWeight', 'bold');
+    % Position 4: Binary mask for reference image (middle left)
+    subplot(3, 3, 4); imshow(img1_mask); title(['Binary Mask: Reference'], 'FontWeight', 'bold');
+
+    % Position 5: Binary mask for comparison image (middle middle)
+    subplot(3, 3, 5); imshow(img2_mask); title(['Binary Mask: Comparison'], 'FontWeight', 'bold');
+
+    % Position 6: Binary mask united (middle right)
+    subplot(3, 3, 6); imshow(img_united_mask); title(['Binary Mask: United'], 'FontWeight', 'bold');
+
+    % Position 7: Reference image masked (bottom left)
+    subplot(3, 3, 7); imshow(rgbMaskedImage1); title('Reference Image Masked', 'FontWeight', 'bold');
+
+    % Position 8: Comparison image masked (bottom middle)
+    subplot(3, 3, 8); imshow(rgbMaskedImage2); title('Comparison Image Masked', 'FontWeight', 'bold');
+
+    % Position 9: Empty (bottom right)
+    subplot(3, 3, 9); axis off; title('', 'FontWeight', 'bold');
 end

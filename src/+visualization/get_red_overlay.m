@@ -115,7 +115,7 @@ function [overlay_image, stats] = get_red_overlay(ref_img, img, category, inputP
     fprintf('Calculating statistics...\n');
 
     % Calculate statistics using utils function
-    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change);
+    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change, category);
 
     fprintf('Red overlay generation completed successfully!\n');
 end

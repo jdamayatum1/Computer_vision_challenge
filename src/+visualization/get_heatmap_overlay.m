@@ -52,7 +52,7 @@ function [overlay_image, stats] = get_heatmap_overlay(ref_img, img, category, in
         terrain_mask_united = terrain_mask_ref | terrain_mask_img;
         fprintf('Terrain mask generated successfully.\n');
     catch ME
-        fprintf('Warning: get_terrain_mask function not available. Using partial image mask.\n');
+        fprintf('Warning: masks.category_masks function not available. Using partial image mask.\n');
         fprintf('Error: %s\n', ME.message);
         % Create a partial mask as fallback (exclude left half)
         terrain_mask_ref = true(size(rgb2gray(ref_img)));
@@ -105,7 +105,7 @@ function [overlay_image, stats] = get_heatmap_overlay(ref_img, img, category, in
     masked_change = change_mask & terrain_mask_united;
 
     % Calculate statistics using utils function
-    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change);
+    stats = visualization.calculateStats(ref_img, img, terrain_mask_ref, terrain_mask_img, masked_change, category);
 
     fprintf('Heatmap overlay generation completed successfully!\n');
 end
