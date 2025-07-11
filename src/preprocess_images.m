@@ -7,7 +7,7 @@ function preprocessedImages = preprocess_images(imagePaths)
 % Output:
 %   preprocessedImages - Struct array with fields:
 %       .name  - file name
-%       .image - preprocessed grayscale image
+%       .image - preprocessed image (resized)
 
     if ~iscell(imagePaths)
         error('Input must be a cell array of image file paths.');
@@ -93,19 +93,6 @@ function preprocessedImages = preprocess_images(imagePaths)
 
     for i = 1:length(sortedPaths)
         img = imageData{i};
-
-        % Normalize brightness
-        if size(img, 3) == 3
-            img = im2double(img);
-            hsv = rgb2hsv(img);
-            hsv(:,:,3) = histeq(hsv(:,:,3));
-            img = hsv2rgb(hsv);
-        else
-            img = histeq(img);
-            img = im2double(img);
-        end
-
-        img = imgaussfilt(img, 1);  % Gaussian blur
         img = imresize(img, minSize);  % Resize to min size
 
         % Save
