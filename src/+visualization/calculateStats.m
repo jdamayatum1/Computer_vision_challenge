@@ -22,6 +22,7 @@ function stats = calculateStats(ref_img, img, mask_ref_img, mask_img, mask_diff)
 
     stats.img_ref_mask = mask_ref_img;
     stats.img_img_mask = mask_img;
+    stats.img_united_mask = mask_ref_img | mask_img;
     stats.img_diff_mask = mask_diff;
 
     % Mask statistics
