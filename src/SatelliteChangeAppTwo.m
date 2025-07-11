@@ -37,9 +37,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
         HeatmapColorMapLabel matlab.ui.control.Label
         GaussianSigmaSlider matlab.ui.control.Slider
         GaussianSigmaLabel matlab.ui.control.Label
-        
-        ComputedOverlays struct % Stores overlays for all visualization methods
 
+        ComputedOverlays struct % Stores overlays for all visualization methods
+        OverlaysComputed logical = false % Track if overlays are up-to-date
 
         ImageDropDown1 matlab.ui.control.DropDown
         ImageDropDown2 matlab.ui.control.DropDown
@@ -101,6 +101,35 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
         end
 
+        function fieldName = getVisualizationFieldName(app, dropdownValue)
+            % Map dropdown display names to struct field names
+            switch dropdownValue
+                case 'Overlay'
+                    fieldName = 'Overlay';
+                case 'Absolute Difference'
+                    fieldName = 'AbsoluteDifference';
+                case 'Heatmap'
+                    fieldName = 'Heatmap';
+                case 'Red Overlay'
+                    fieldName = 'RedOverlay';
+                otherwise
+                    fieldName = 'Overlay'; % Default fallback
+            end
+
+        end
+
+        function onMaskCategoryChanged(app, ~)
+            % Callback when mask category radio button changes
+            app.OverlaysComputed = false; % Mark overlays as outdated
+            app.TimelapseFrames = {}; % Clear cached timelapse frames
+        end
+
+        function onParameterChanged(app, ~)
+            % Callback when any overlay parameter changes (alpha, sigma, colormap)
+            app.OverlaysComputed = false; % Mark overlays as outdated
+            app.TimelapseFrames = {}; % Clear cached timelapse frames
+        end
+
         function LoadFolderButtonPushed(app, ~)
             folder = uigetdir;
             if folder == 0, return; end
@@ -112,8 +141,9 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             for i = 1:numel(exts)
                 imageFilesCell{i} = dir(fullfile(folder, exts{i}));
             end
+
             imageFiles = vertcat(imageFilesCell{:});
-            
+
             if isempty(imageFiles)
                 uialert(app.UIFigure, 'No supported images found.', 'Error');
                 return;
@@ -146,7 +176,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 moving_img = app.getImageByIndex(k);
 
                 try
-                    reg = registration.registerImagesSURF(moving_img, app.RegisteredImages{k-1}); % Register onto the previous image
+                    reg = registration.registerImagesSURF(moving_img, app.RegisteredImages{k - 1}); % Register onto the previous image
                     app.RegisteredImages{k} = reg.registered;
                 catch
                     app.RegisteredImages{k} = moving_img; % Fallback to raw image
@@ -158,6 +188,10 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             end
 
             close(h);
+
+            % Reset overlay computation flag
+            app.OverlaysComputed = false;
+            app.TimelapseFrames = {};
 
             % Update previews
             updateImagePreview(app, 1);
@@ -207,60 +241,137 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Optionally, stop any running playback
             onPauseButtonPressed(app);
         end
-        function computeOverlays(app)
-            % Prepare registered images
-            [img1, ~] = getRegisteredImagePair(app);
-            if isempty(img1), return; end
 
-            % Get selected mask category
+        function ensureOverlaysComputed(app)
+            % Ensure overlays are computed and up-to-date before using them
+            if ~app.OverlaysComputed || isempty(app.ComputedOverlays)
+                computeOverlays(app);
+            end
+
+        end
+
+        function computeOverlays(app)
+            % Stage 1: Prepare registered images
+            [img1, ~] = getRegisteredImagePair(app);
+
+            if isempty(img1) || isempty(app.RegisteredImages)
+                return;
+            end
+
+            % Stage 2: Get selected mask category and parameters
             selectedMask = getSelectedMask(app);
 
-            % Initialize storage for overlays
-            app.ComputedOverlays = struct('Overlay', {}, 'AbsoluteDifference', {}, 'Heatmap', {}, 'RedOverlay', {});
+            % Prepare parameters for heatmap and red overlay
+            params = struct();
+            params.alpha = app.HeatmapAlphaSlider.Value;
+            params.gaussian_sigma = app.GaussianSigmaSlider.Value;
+            params.colormap_name = app.HeatmapColorMapDropDown.Value;
 
-            % Compute overlays for all visualization methods
-            for i = 1:numel(app.RegisteredImages)
+            % Stage 3: Initialize storage for all overlay types
+            numImages = numel(app.RegisteredImages);
+            app.ComputedOverlays = struct('Overlay', cell(1, numImages), ...
+                'AbsoluteDifference', cell(1, numImages), ...
+                'Heatmap', cell(1, numImages), ...
+                'RedOverlay', cell(1, numImages));
+
+            % Stage 4: Compute overlays for all images based on mask regions
+            h = uiprogressdlg(app.UIFigure, ...
+                'Title', 'Computing Overlays', ...
+                'Message', 'Please wait...', ...
+                'Indeterminate', 'off', ...
+                'Cancelable', 'off');
+
+            for i = 1:numImages
                 img2 = app.RegisteredImages{i};
 
-                % Overlay
+                % Basic overlay (simple blend)
                 app.ComputedOverlays(i).Overlay = 0.5 * im2double(img1) + 0.5 * im2double(img2);
 
                 % Absolute Difference
-                app.ComputedOverlays(i).AbsoluteDifference = abs(im2double(img1) - im2double(img2)); 
+                app.ComputedOverlays(i).AbsoluteDifference = abs(im2double(img1) - im2double(img2));
 
-                % Heatmap
-                params = struct();
-                params.alpha = app.HeatmapAlphaSlider.Value;
-                params.gaussian_sigma = app.GaussianSigmaSlider.Value;
-                params.colormap_name = app.HeatmapColorMapDropDown.Value;
-                [heatmapOverlay, ~] = visualization.get_heatmap_overlay(img1, img2, selectedMask, params);
-                app.ComputedOverlays(i).Heatmap = heatmapOverlay;
+                % Heatmap overlay (uses mask regions)
+                try
+                    [heatmapOverlay, ~] = visualization.get_heatmap_overlay(img1, img2, selectedMask, params);
+                    app.ComputedOverlays(i).Heatmap = heatmapOverlay;
+                    fprintf('Heatmap overlay computed successfully for image %d\n', i);
+                catch ME
+                    % Fallback to absolute difference if heatmap fails
+                    app.ComputedOverlays(i).Heatmap = app.ComputedOverlays(i).AbsoluteDifference;
+                    warning('Heatmap computation failed for image %d: %s', i, ME.message);
+                end
 
-                % Red Overlay
-                params.alpha = app.HeatmapAlphaSlider.Value;
-                params.gaussian_sigma = app.GaussianSigmaSlider.Value;
-                [redOverlay, ~] = visualization.get_red_overlay(img1, img2, selectedMask, params);
-                app.ComputedOverlays(i).RedOverlay = redOverlay;
+                % Red overlay (uses mask regions) - SAME processing flow as heatmap
+                try
+                    [redOverlay, ~] = visualization.get_red_overlay(img1, img2, selectedMask, params);
+                    app.ComputedOverlays(i).RedOverlay = redOverlay;
+                    fprintf('Red overlay computed successfully for image %d\n', i);
+                catch ME
+                    % Fallback to absolute difference if red overlay fails
+                    app.ComputedOverlays(i).RedOverlay = app.ComputedOverlays(i).AbsoluteDifference;
+                    warning('Red overlay computation failed for image %d: %s', i, ME.message);
+                end
+
+                h.Value = i / numImages;
+                h.Message = sprintf('Computing overlays %d of %d...', i, numImages);
+                drawnow;
             end
+
+            close(h);
+
+            % Stage 5: Mark overlays as computed and clear cached frames
+            app.OverlaysComputed = true;
+            app.TimelapseFrames = {}; % Clear to force regeneration with new overlays
         end
-        function onVisualizeButtonPressed(app, ~)
-            % Compute overlays if not already computed
+
+        function prepareTimelapseFrames(app, mode)
+            % Prepare timelapse frames for the selected visualization mode
             if isempty(app.ComputedOverlays)
-                computeOverlays(app);
+                return;
+            end
+
+            % Map dropdown value to field name
+            fieldName = getVisualizationFieldName(app, mode);
+
+            % Extract all overlays of the selected mode into a cell array
+            app.TimelapseFrames = {app.ComputedOverlays.(fieldName)};
+            app.TimelapseFrameIndex = 1;
+        end
+
+        function onVisualizeButtonPressed(app, ~)
+            % Ensure overlays are computed and up-to-date
+            ensureOverlaysComputed(app);
+
+            if isempty(app.ComputedOverlays)
+                uialert(app.UIFigure, 'No overlays computed. Please load images first.', 'Error');
+                return;
             end
 
             % Get selected visualization method
             mode = app.VisualizationDropDown.Value;
+            fieldName = getVisualizationFieldName(app, mode);
+            selectedMask = getSelectedMask(app);
 
             % Display the overlay for the selected second image
             idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
-            if ~isempty(idx2)
-                imshow(app.ComputedOverlays(idx2).(mode), 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
-                title(app.ResultAxes, sprintf('%s Overlay (%s): %s → %s', ...
-                    mode, selectedMask, ...
-                    strrep(app.ImageDropDown2.Value, '_', ' '), ...
-                    strrep(app.ImageDropDown1.Value, '_', ' ')));
+
+            if ~isempty(idx2) && idx2 <= numel(app.ComputedOverlays)
+                % Verify the overlay exists
+                if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
+                    overlayImage = app.ComputedOverlays(idx2).(fieldName);
+                    imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    title(app.ResultAxes, sprintf('%s (%s): %s → %s', ...
+                        mode, selectedMask, ...
+                        strrep(app.ImageDropDown1.Value, '_', ' '), ...
+                        strrep(app.ImageDropDown2.Value, '_', ' ')));
+                    fprintf('Successfully displayed %s overlay for image %d\n', mode, idx2);
+                else
+                    uialert(app.UIFigure, sprintf('%s overlay not available. Please recompute overlays.', mode), 'Error');
+                    fprintf('ERROR: %s overlay not found for image %d\n', mode, idx2);
+                end
+
             end
+
         end
 
         function updateImagePreview(app, index)
@@ -308,28 +419,23 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 onPauseButtonPressed(app);
             end
 
+            % Ensure overlays are computed before starting playback
+            ensureOverlaysComputed(app);
+
+            if isempty(app.ComputedOverlays)
+                uialert(app.UIFigure, 'No overlays computed. Please visualize first.', 'Error');
+                return;
+            end
+
             app.IsPlaying = true;
             app.CurrentVisMode = app.VisualizationDropDown.Value;
 
             % Prepare/reset flicker state
             app.FlickerState = false;
 
-            % Reset timelapse state
-            if strcmp(app.CurrentVisMode, 'Timelapse')
-
-                if isempty(app.TimelapseFrames)
-                    % Initialize timelapse frames if not already done
-                    idx1 = find(strcmp(app.ImageDropDown1.Items, app.ImageDropDown1.Value));
-                    idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
-                    if isempty(idx1) || isempty(idx2), return; end
-
-                    low = min(idx1, idx2);
-                    high = max(idx1, idx2);
-
-                    app.TimelapseFrames = app.RegisteredImages(low:high);
-                    app.TimelapseFrameIndex = 1;
-                end
-
+            % Prepare timelapse frames if needed
+            if strcmp(app.ReplayModeDropdown.Value, 'Timelapse')
+                prepareTimelapseFrames(app, app.CurrentVisMode);
             end
 
             % Use SpeedSlider value for timer period (lower = faster)
@@ -359,35 +465,59 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
         end
 
         function runPlaybackStep(app)
+
             if isempty(app.ComputedOverlays)
                 uialert(app.UIFigure, 'No overlays available for replay.', 'Error');
                 return;
             end
 
             mode = app.VisualizationDropDown.Value;
+            fieldName = getVisualizationFieldName(app, mode);
             idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
 
             switch app.ReplayModeDropdown.Value
                 case 'Flicker'
                     % Flicker between the selected second image and its overlay
-                    if isempty(idx2), return; end
+                    if isempty(idx2) || idx2 > numel(app.ComputedOverlays)
+                        return;
+                    end
+
                     if app.FlickerState
-                        imshow(app.ComputedOverlays(idx2).(mode), 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        % Verify the overlay exists before using it
+                        if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
+                            overlayImage = app.ComputedOverlays(idx2).(fieldName);
+                            imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                            title(app.ResultAxes, sprintf('%s Overlay', mode));
+                        else
+                            % Fall back to original image if overlay not available
+                            imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                            title(app.ResultAxes, sprintf('%s Overlay (Not Available)', mode));
+                            fprintf('WARNING: %s overlay not available for flicker, showing original image\n', mode);
+                        end
+
                     else
                         imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        title(app.ResultAxes, 'Original Image');
                     end
+
                     app.FlickerState = ~app.FlickerState;
 
                 case 'Timelapse'
                     % Timelapse through all overlays for the chosen visualization method
                     if isempty(app.TimelapseFrames)
-                        app.TimelapseFrames = {app.ComputedOverlays.(mode)}; % Extract overlays for the selected mode
-                        app.TimelapseFrameIndex = 1;
+                        prepareTimelapseFrames(app, mode);
                     end
 
-                    imshow(app.TimelapseFrames{app.TimelapseFrameIndex}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
-                    app.TimelapseFrameIndex = mod(app.TimelapseFrameIndex, numel(app.TimelapseFrames)) + 1;
+                    if ~isempty(app.TimelapseFrames)
+                        currentFrame = app.TimelapseFrames{app.TimelapseFrameIndex};
+                        imshow(currentFrame, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        title(app.ResultAxes, sprintf('%s Timelapse - Frame %d/%d', ...
+                            mode, app.TimelapseFrameIndex, numel(app.TimelapseFrames)));
+                        app.TimelapseFrameIndex = mod(app.TimelapseFrameIndex, numel(app.TimelapseFrames)) + 1;
+                    end
+
             end
+
         end
 
         function onSpeedSliderChanged(app, ~)
@@ -430,7 +560,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Change Type Radio Group - Updated to include all mask categories
             app.ChangeTypeGroup = uibuttongroup(app.UIFigure, ...
                 'Title', 'Mask Category', ...
-                'Position', [20 330 180 200]); % Adjusted position to push down
+                'Position', [20 330 180 200], ... % Adjusted position to push down
+                'SelectionChangedFcn', @(bg, event) onMaskCategoryChanged(app, event)); % Add callback
 
             % Create radio buttons for all valid categories
             app.AllButton = uiradiobutton(app.ChangeTypeGroup, ...
@@ -473,9 +604,10 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             app.OktoberfestButton = uiradiobutton(app.ChangeTypeGroup, ...
                 'Text', 'Oktoberfest', ...
                 'Position', [90 80 80 20]);
+
             % Visualization Type Dropdown
             app.VisualizationDropDown = uidropdown(app.UIFigure, ...
-                'Items', { 'Overlay', 'Absolute Difference', 'Heatmap', 'Red Overlay'}, ...
+                'Items', {'Overlay', 'Absolute Difference', 'Heatmap', 'Red Overlay'}, ...
                 'Value', 'Overlay', ...
                 'Position', [20 310 180 30]);
 
@@ -503,7 +635,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Limits', [0 1], ...
                 'Value', 0.6, ...
                 'MajorTicks', [0 0.25 0.5 0.75 1], ...
-                'Tooltip', 'Alpha transparency');
+                'Tooltip', 'Alpha transparency', ...
+                'ValueChangedFcn', @(slider, event) onParameterChanged(app, event)); % Add callback
 
             % Gaussian Sigma Label
             app.GaussianSigmaLabel = uilabel(app.AdvancedPanel, ...
@@ -516,7 +649,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Limits', [0.1 5], ...
                 'Value', 1.0, ...
                 'MajorTicks', [0.1 1 2 3 4 5], ...
-                'Tooltip', 'Gaussian smoothing sigma');
+                'Tooltip', 'Gaussian smoothing sigma', ...
+                'ValueChangedFcn', @(slider, event) onParameterChanged(app, event)); % Add callback
 
             % Heatmap Colormap Dropdown Label
             app.HeatmapColorMapLabel = uilabel(app.AdvancedPanel, ...
@@ -528,7 +662,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Items', {'jet', 'hot', 'parula', 'turbo'}, ...
                 'Value', 'jet', ...
                 'Position', [10 10 160 22], ...
-                'Tooltip', 'Heatmap colormap');
+                'Tooltip', 'Heatmap colormap', ...
+                'ValueChangedFcn', @(dropdown, event) onParameterChanged(app, event)); % Add callback
 
             % Info Text Area (in a panel for border)
             app.infoPanel = uipanel(app.UIFigure, ...
@@ -604,11 +739,12 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'ButtonPushedFcn', @(btn, event) onPauseButtonPressed(app), ...
                 'Visible', 'on');
 
-            % Add Replay Mode Dropdown to the left of the Play button
+            % Add Replay Mode Dropdown to the left of the Play button - CHANGE: Make it open upwards
             app.ReplayModeDropdown = uidropdown(app.UIFigure, ...
                 'Items', {'Flicker', 'Timelapse'}, ...
                 'Value', 'Flicker', ...
                 'Position', [340 50 50 30]);
+            % 'DropDirection', 'up'); % This makes the dropdown open upwards
 
             % Speed slider (hidden by default)
             app.SpeedSlider = uislider(app.UIFigure, ...
@@ -656,6 +792,7 @@ function onShowMasksButtonPressed(app)
 
     % Get the registered image pair
     [img1, img2reg] = getRegisteredImagePair(app);
+
     if isempty(img1) || isempty(img2reg)
         uialert(app.UIFigure, 'No images available for visualization.', 'Error');
         return;
