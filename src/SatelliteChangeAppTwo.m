@@ -1210,8 +1210,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             app.ImageDropDown2.ValueChangedFcn = @(dd, event) onComparisonImageChanged(app, event);
 
             % Main Visualization Output - Larger and better positioned
-            resultPanelY = 100;
-            resultPanelHeight = dropdownY - resultPanelY - 20;
+            resultPanelY = 90;
+            resultPanelHeight = dropdownY - resultPanelY - 10;
             resultPanelWidth = availableWidth;
 
             resultPanel = uipanel(app.UIFigure, ...
