@@ -56,7 +56,7 @@ function stats = calculateStats(ref_img, img, mask_ref_img, mask_img, mask_diff,
     % stats.change_max = max(diff_img);
     % stats.change_min = min(diff_img);
 
-    % stats.stats_text_cell = formatStatsForDisplay(stats);
+    stats.stats_text_cell = formatStatsForDisplay(stats);
 
     fprintf('Statistics calculated successfully.\n');
 end
