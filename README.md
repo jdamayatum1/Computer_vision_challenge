@@ -40,7 +40,6 @@ This project enables the detection and visualization of changes in satellite ima
 ```
 Computer_vision_challenge/
 ├── src/                  # Core MATLAB source code
-│   ├── preprocess_images.m
 │   ├── +registration/    # Image registration functions
 │   ├── +masks/           # Mask generation utilities
 │   ├── +visualization/   # Visualization utilities
@@ -158,33 +157,6 @@ Computer_vision_challenge/
 - **Statistics Display:** View absolute and relative change metrics.
 - **Progress Feedback:** Visual indication of processing steps.
 - **Interactive Previews:** Compare original, registered, and processed images.
-
----
-
-## Example Usage
-
-```matlab
-image_paths = {
-    '/path/to/image1.jpg',
-    '/path/to/image2.jpg',
-    '/path/to/image3.jpg'
-};
-main_picture_path = '/path/to/reference_image.jpg';
-is_new_file_list = true;
-category = 'city';
-
-inputParams.threshold = 0.1;
-inputParams.sensitivity = 0.5;
-inputParams.rotation_tolerance = 2.0;
-inputParams.change_detection_method = 'histogram';
-
-[processed_images, gui_params] = processChangeDetection(...
-    image_paths, ...
-    main_picture_path, ...
-    is_new_file_list, ...
-    category, ...
-    inputParams);
-```
 
 ---
 
