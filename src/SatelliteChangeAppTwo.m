@@ -550,6 +550,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
                     overlayImage = app.ComputedOverlays(idx2).(fieldName);
                     imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    axis(app.ResultAxes, 'image');
+                    axis(app.ResultAxes, 'off');
                     title(app.ResultAxes, sprintf('%s (%s): %s → %s', ...
                         mode, selectedMask, ...
                         strrep(app.ImageDropDown1.Value, '_', ' '), ...
@@ -562,9 +564,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                     uialert(app.UIFigure, sprintf('%s overlay not available. Please recompute overlays.', mode), 'Error');
                     fprintf('ERROR: %s overlay not found for image %d\n', mode, idx2);
                 end
-
             end
-
         end
 
         function updateImagePreview(app, index)
@@ -583,7 +583,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 blank = ones(100, 100, 3);
                 imshow(blank, 'Parent', ax);
                 axis(ax, 'off');
-                title(ax, axTitle);
+                % title(ax, axTitle); % <-- REMOVE or COMMENT OUT this line
                 return;
             end
 
@@ -594,7 +594,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 blank = ones(100, 100, 3);
                 imshow(blank, 'Parent', ax);
                 axis(ax, 'off');
-                title(ax, [axTitle, ' (Not found)']);
+                % title(ax, [axTitle, ' (Not found)']); % <-- REMOVE or COMMENT OUT this line
                 return;
             end
 
@@ -603,7 +603,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             imshow(img, 'Parent', ax);
             axis(ax, 'image');
             axis(ax, 'off');
-            title(ax, axTitle);
+            % title(ax, axTitle); % <-- REMOVE or COMMENT OUT this line
         end
 
         function onPlayButtonPressed(app)
@@ -688,6 +688,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
                             overlayImage = app.ComputedOverlays(idx2).(fieldName);
                             imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                            axis(app.ResultAxes, 'image');
+                            axis(app.ResultAxes, 'off');
                             title(app.ResultAxes, sprintf('%s Overlay', mode));
 
                             % Display stats if available
@@ -695,12 +697,16 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                         else
                             % Fall back to original image if overlay not available
                             imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                            axis(app.ResultAxes, 'image');
+                            axis(app.ResultAxes, 'off');
                             title(app.ResultAxes, sprintf('%s Overlay (Not Available)', mode));
                             fprintf('WARNING: %s overlay not available for flicker, showing original image\n', mode);
                         end
 
                     else
                         imshow(app.RegisteredImages{idx2}, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        axis(app.ResultAxes, 'image');
+                        axis(app.ResultAxes, 'off');
                         title(app.ResultAxes, 'Original Image');
                     end
 
@@ -715,6 +721,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                     if ~isempty(app.TimelapseFrames)
                         currentFrame = app.TimelapseFrames{app.TimelapseFrameIndex};
                         imshow(currentFrame, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        axis(app.ResultAxes, 'image');
+                        axis(app.ResultAxes, 'off');
                         title(app.ResultAxes, sprintf('%s Timelapse - Frame %d/%d', ...
                             mode, app.TimelapseFrameIndex, numel(app.TimelapseFrames)));
 
@@ -734,6 +742,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                     if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
                         overlayImage = app.ComputedOverlays(idx2).(fieldName);
                         imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                        axis(app.ResultAxes, 'image');
+                        axis(app.ResultAxes, 'off');
                         title(app.ResultAxes, sprintf('%s Static Overlay: %s → %s', ...
                             mode, ...
                             strrep(app.ImageDropDown1.Value, '_', ' '), ...
@@ -851,6 +861,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
                     overlayImage = app.ComputedOverlays(idx2).(fieldName);
                     imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    axis(app.ResultAxes, 'image');
+                    axis(app.ResultAxes, 'off');
                     title(app.ResultAxes, sprintf('%s (%s): %s → %s', ...
                         mode, selectedMask, ...
                         strrep(app.ImageDropDown1.Value, '_', ' '), ...
@@ -885,6 +897,8 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
                     overlayImage = app.ComputedOverlays(idx2).(fieldName);
                     imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    axis(app.ResultAxes, 'image');
+                    axis(app.ResultAxes, 'off');
                     title(app.ResultAxes, sprintf('%s Static (%s): %s → %s', ...
                         mode, selectedMask, ...
                         strrep(app.ImageDropDown1.Value, '_', ' '), ...
@@ -897,9 +911,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                     uialert(app.UIFigure, sprintf('%s overlay not available. Please compute overlays first.', mode), 'Error');
                     fprintf('ERROR: Static mode - %s overlay not found for image %d\n', mode, idx2);
                 end
-
             end
-
         end
 
         function displayStatsInGUI(app, mode, imageIndex)
@@ -1161,10 +1173,18 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Position', [rightPanelStartX imagePanelY imagePanelWidth imagePanelHeight], ...
                 'BorderType', 'line', ...
                 'Title', '');
+            label1 = uilabel(panel1, ...
+                'Text', 'Image 1', ...
+                'FontWeight', 'bold', ...
+                'FontSize', 14, ...
+                'HorizontalAlignment', 'center', ...
+                'Position', [1 imagePanelHeight-28 imagePanelWidth-2 24]);
             app.ImageAxes1 = uiaxes(panel1, ...
-                'Position', [5 5 imagePanelWidth - 10 imagePanelHeight - 10], ...
+                'Units', 'normalized', ...
+                'Position', [0.05 0.05 0.9 0.8], ...
                 'Box', 'on');
-            title(app.ImageAxes1, 'Image 1');
+            app.ImageAxes1.XTick = [];
+            app.ImageAxes1.YTick = [];
             axis(app.ImageAxes1, 'off');
 
             % Image 2 Panel
@@ -1172,10 +1192,18 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Position', [rightPanelStartX + imagePanelWidth + 15 imagePanelY imagePanelWidth imagePanelHeight], ...
                 'BorderType', 'line', ...
                 'Title', '');
+            label2 = uilabel(panel2, ...
+                'Text', 'Image 2', ...
+                'FontWeight', 'bold', ...
+                'FontSize', 14, ...
+                'HorizontalAlignment', 'center', ...
+                'Position', [1 imagePanelHeight-28 imagePanelWidth-2 24]);
             app.ImageAxes2 = uiaxes(panel2, ...
-                'Position', [5 5 imagePanelWidth - 10 imagePanelHeight - 10], ...
+                'Units', 'normalized', ...
+                'Position', [0.05 0.05 0.9 0.8], ...
                 'Box', 'on');
-            title(app.ImageAxes2, 'Image 2');
+            app.ImageAxes2.XTick = [];
+            app.ImageAxes2.YTick = [];
             axis(app.ImageAxes2, 'off');
 
             % Dropdowns below image panels
@@ -1210,18 +1238,28 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             app.ImageDropDown2.ValueChangedFcn = @(dd, event) onComparisonImageChanged(app, event);
 
             % Main Visualization Output - Larger and better positioned
-            resultPanelY = 90;
-            resultPanelHeight = dropdownY - resultPanelY - 10;
-            resultPanelWidth = availableWidth;
+            resultPanelY = -150 ; % Lower Y for more height (was 80)
+            resultPanelHeight = dropdownY - resultPanelY - 10 ; % Add 120 pixels to height
+            resultPanelWidth = availableWidth; % Keep width the same
 
             resultPanel = uipanel(app.UIFigure, ...
                 'Position', [rightPanelStartX resultPanelY resultPanelWidth resultPanelHeight], ...
                 'BorderType', 'line', ...
                 'Title', '');
+
+            % Title label for the result panel
+            titleLabel = uilabel(resultPanel, ...
+                'Text', 'Visualization Output', ...
+                'FontWeight', 'bold', ...
+                'FontSize', 16, ...
+                'HorizontalAlignment', 'center', ...
+                'Position', [1 resultPanelHeight-30 resultPanelWidth-2 30]); % Adjust as needed
+
+            % Make axes fill the panel except for the title label
             app.ResultAxes = uiaxes(resultPanel, ...
-                'Position', [5 5 resultPanelWidth - 10 resultPanelHeight - 10], ...
+                'Units', 'normalized', ...
+                'Position', [0 0 1 (resultPanelHeight-40)/resultPanelHeight], ...
                 'Box', 'on');
-            title(app.ResultAxes, 'Visualization Output');
             axis(app.ResultAxes, 'off');
 
             % Playback Controls - Centered at bottom
