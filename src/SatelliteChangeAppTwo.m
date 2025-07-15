@@ -138,6 +138,13 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Auto-recompute and display
             if ~isempty(app.RegisteredImages)
                 autoRecomputeAndDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             end
 
         end
@@ -150,6 +157,13 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Auto-recompute and display
             if ~isempty(app.RegisteredImages)
                 autoRecomputeAndDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             end
 
         end
@@ -172,6 +186,13 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 app.OverlaysComputed = false;
                 app.TimelapseFrames = {};
                 autoRecomputeAndDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             else
                 % If no registered images yet, just update the preview
                 updateImagePreview(app, 1);
@@ -190,9 +211,23 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Just auto-display with existing overlays (no recomputation needed)
             if ~isempty(app.RegisteredImages) && app.OverlaysComputed
                 autoDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             elseif ~isempty(app.RegisteredImages)
                 % If overlays not computed yet, compute them first
                 autoRecomputeAndDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             end
 
         end
@@ -330,6 +365,15 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Update info
             app.InfoTextArea.Value = sprintf('Loaded and registered %d images incrementally.', numel(names));
 
+            % Automatically trigger mask recalculation and display after loading
+            if numel(names) >= 2
+                % Auto-recompute overlays and display for the new dataset
+                autoRecomputeAndDisplay(app);
+
+                % Update info to reflect that overlays have been computed
+                app.InfoTextArea.Value = sprintf('Loaded and registered %d images incrementally. Overlays computed automatically.', numel(names));
+            end
+
             % Force window to front and maximized
             app.UIFigure.WindowState = 'maximized';
             drawnow;
@@ -371,6 +415,13 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
             % Auto-display with the new visualization mode
             if ~isempty(app.RegisteredImages) && app.OverlaysComputed
                 autoDisplay(app);
+
+                % For static mode, ensure display is updated consistently
+                if strcmp(app.ReplayModeDropdown.Value, 'Static')
+                    % Update display using the same approach as other modes
+                    autoDisplayStaticMode(app);
+                end
+
             end
 
         end
@@ -814,6 +865,43 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
 
         end
 
+        function autoDisplayStaticMode(app)
+            % Automatically display the current visualization for static mode
+            % This ensures consistent behavior with timelapse and flicker modes
+            if isempty(app.ComputedOverlays)
+                return;
+            end
+
+            % Get selected visualization method
+            mode = app.VisualizationDropDown.Value;
+            fieldName = getVisualizationFieldName(app, mode);
+            selectedMask = getSelectedMask(app);
+
+            % Display the overlay for the selected second image
+            idx2 = find(strcmp(app.ImageDropDown2.Items, app.ImageDropDown2.Value));
+
+            if ~isempty(idx2) && idx2 <= numel(app.ComputedOverlays)
+                % Verify the overlay exists
+                if isfield(app.ComputedOverlays, fieldName) && ~isempty(app.ComputedOverlays(idx2).(fieldName))
+                    overlayImage = app.ComputedOverlays(idx2).(fieldName);
+                    imshow(overlayImage, 'Parent', app.ResultAxes, 'InitialMagnification', 'fit');
+                    title(app.ResultAxes, sprintf('%s Static (%s): %s → %s', ...
+                        mode, selectedMask, ...
+                        strrep(app.ImageDropDown1.Value, '_', ' '), ...
+                        strrep(app.ImageDropDown2.Value, '_', ' ')));
+                    fprintf('Auto-displayed %s static overlay for image %d\n', mode, idx2);
+
+                    % Display stats if available
+                    displayStatsInGUI(app, mode, idx2);
+                else
+                    uialert(app.UIFigure, sprintf('%s overlay not available. Please compute overlays first.', mode), 'Error');
+                    fprintf('ERROR: Static mode - %s overlay not found for image %d\n', mode, idx2);
+                end
+
+            end
+
+        end
+
         function displayStatsInGUI(app, mode, imageIndex)
             % Display statistics in the InfoTextArea for heatmap and red overlay modes
 
@@ -967,21 +1055,19 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Text', 'Show Advanced Settings ▼', ...
                 'Position', [leftPanelX currentY - buttonHeight leftPanelWidth buttonHeight], ...
                 'ButtonPushedFcn', @(btn, event) toggleAdvancedPanel(app), ...
-                'BackgroundColor', [0.97 0.97 0.97], ...
                 'FontWeight', 'bold');
 
             currentY = currentY - buttonHeight - spacing;
 
             % Advanced Settings Panel - Adjusted size and positioning
-            advancedPanelHeight = 180;
+            advancedPanelHeight = 220;
             app.AdvancedPanel = uipanel(app.UIFigure, ...
                 'Position', [leftPanelX currentY - advancedPanelHeight leftPanelWidth advancedPanelHeight], ...
                 'FontWeight', 'bold', ...
-                'BackgroundColor', [0.97 0.97 0.97], ...
                 'Visible', 'off');
 
             % Advanced panel components with better spacing
-            advY = advancedPanelHeight - 30;
+            advY = advancedPanelHeight - 25;
 
             app.HeatmapAlphaLabel = uilabel(app.AdvancedPanel, ...
                 'Text', 'Heatmap Alpha:', ...
@@ -997,7 +1083,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Tooltip', 'Alpha transparency', ...
                 'ValueChangedFcn', @(slider, event) onParameterChanged(app, event));
 
-            advY = advY - 35;
+            advY = advY - 50;
 
             app.GaussianSigmaLabel = uilabel(app.AdvancedPanel, ...
                 'Text', 'Gaussian Sigma:', ...
@@ -1013,7 +1099,7 @@ classdef SatelliteChangeAppTwo < matlab.apps.AppBase
                 'Tooltip', 'Gaussian smoothing sigma', ...
                 'ValueChangedFcn', @(slider, event) onParameterChanged(app, event));
 
-            advY = advY - 35;
+            advY = advY - 50;
 
             app.HeatmapColorMapLabel = uilabel(app.AdvancedPanel, ...
                 'Text', 'Colormap:', ...
