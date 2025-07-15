@@ -186,11 +186,11 @@ inputParams.change_detection_method = 'histogram';
 ```
 ## Contributors
 **Group 14:**
--Juan Diego Amaya Cueva
--Otto Dorfer
--Nejla Selimović
--Jakub Skupien
--Dinis Sousa Lopes Carmona
--Orhun Uçak
+- Juan Diego Amaya Cueva
+- Otto Dorfer
+- Nejla Selimović
+- Jakub Skupien
+- Dinis Sousa Lopes Carmona
+- Orhun Uçak
 
 ---
