@@ -19,6 +19,7 @@ A MATLAB-based toolkit for detecting and visualizing changes in satellite imager
 - [Function API](#function-api)
 - [GUI Features](#gui-features)
 - [Example Usage](#example-usage)
+- [Required MATLAB Add-Ons](#required-matlab-add-ons)
 - [Contributors](#contributors)
 
 ---
@@ -184,7 +185,27 @@ inputParams.change_detection_method = 'histogram';
     category, ...
     inputParams);
 ```
+
+---
+
+## Required MATLAB Add-Ons
+
+To run and compile this project, the following MATLAB toolboxes are required:
+
+- **Image Processing Toolbox**  
+  Required for image reading, manipulation, and basic processing functions.
+
+- **Computer Vision Toolbox**  
+  Required for feature detection (e.g., SURF), image registration, and geometric transformations.
+
+- **MATLAB App Designer**  
+  Required for running the GUI (`SatelliteChangeAppTwo.m`). This is included in MATLAB R2016a and later.
+
+
+---
+
 ## Contributors
+
 **Group 14:**
 - Juan Diego Amaya Cueva
 - Otto Dorfer
